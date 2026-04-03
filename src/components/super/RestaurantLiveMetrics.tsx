@@ -7,7 +7,7 @@ import { Table, Product } from "@/lib/firebase/firestore";
 import { Order, OrderItem } from "@/lib/firebase/orders";
 import { Users, Utensils, DollarSign, Clock, AlertTriangle, CheckCircle2, TrendingUp, Info, CreditCard, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { calculatePlanPricing, PlanTier, PLAN_CONFIGS } from "@/lib/utils/pricing";
+import { calculatePlanPricing, PlanTier, PLAN_CONFIGS, getGemAdvisorNote } from "@/lib/utils/pricing";
 import { updateDoc, doc } from "firebase/firestore";
 
 interface LiveStats {
@@ -213,8 +213,13 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
                       <p className="text-4xl font-black text-white tracking-tighter">{(pricing.actualPrice / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                    </div>
                    <div className="text-right">
-                      <p className="text-green-500 text-[10px] font-black tracking-widest uppercase">Lucro Líquido Real</p>
-                      <p className="text-xl font-black text-green-400 tracking-tighter">+{(pricing.netProfit / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                    <p className="text-zinc-500 text-[10px] font-black tracking-widest uppercase">Lucro Líquido Real</p>
+                    <p className={cn(
+                      "text-xl font-black tracking-tighter",
+                      pricing.netProfit >= 0 ? "text-green-400" : "text-red-400"
+                    )}>
+                      {pricing.netProfit >= 0 ? "+" : ""}{(pricing.netProfit / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </p>
                    </div>
                 </div>
 
@@ -253,9 +258,9 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
                   </div>
                </div>
              ) : (
-               <div className="flex items-center gap-4 bg-zinc-800/10 border border-white/5 p-4 rounded-2xl opacity-40">
-                  <CheckCircle2 className="h-5 w-5 text-zinc-500 shrink-0" />
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Gestão de equipe estável</p>
+               <div className="flex items-center gap-4 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                  <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Gestão de equipe estável</p>
                </div>
              )}
 
@@ -269,9 +274,9 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
                   </div>
                </div>
              ) : (
-                <div className="flex items-center gap-4 bg-zinc-800/10 border border-white/5 p-4 rounded-2xl opacity-40">
-                   <CheckCircle2 className="h-5 w-5 text-zinc-500 shrink-0" />
-                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Fila do KDS controlada</p>
+                <div className="flex items-center gap-4 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl">
+                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                   <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Fila do KDS controlada</p>
                 </div>
              )}
 
@@ -292,8 +297,7 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
                    <p className="text-[10px] font-black uppercase tracking-widest">Nota do Consultor Gem</p>
                 </div>
                 <p className="text-[11px] text-zinc-400 leading-relaxed italic">
-                   Este restaurante está consumindo cerca de <span className="text-zinc-200 font-bold">{(stats.monthlyOrders * 0.12).toFixed(2)} MB/dia</span> em transações. 
-                   Sua margem de segurança atual de 35% é robusta para a escala do plano {currentPlan}.
+                   {getGemAdvisorNote(stats, pricing)}
                 </p>
              </div>
            </div>

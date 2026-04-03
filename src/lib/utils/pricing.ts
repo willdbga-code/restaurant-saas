@@ -80,3 +80,37 @@ export function calculatePlanPricing(tier: PlanTier) {
     setupFee: config.setupFee
   };
 }
+
+/**
+ * Inteligência Artificial GEM (Consultor Estratégico)
+ * Gera insights baseados na saúde da conta e infraestrutura.
+ */
+export function getGemAdvisorNote(stats: any, pricing: any) {
+  const reports = [];
+
+  // 1. Alerta de Ineficiência de Staff
+  if (stats.occupiedTables > 0 && stats.staffCount === 0) {
+    reports.push("RISCO CRÍTICO: Mesas abertas sem equipe vinculada. Isso causa abandono de carrinho.");
+  }
+
+  // 2. Alerta de Infra vs Preço
+  if (pricing.netProfit < 3000) { // Menos de R$ 30 de lucro sobre a conta
+     reports.push("MARGEM BAIXA: Este restaurante está consumindo quase o teto da sua infraestrutura no plano atual.");
+  }
+
+  // 3. Alerta de KDS
+  if (stats.hasBottleneck) {
+     reports.push("GARGALO OPERACIONAL: Itens na cozinha excedendo 20 min de espera.");
+  }
+
+  // 4. Elogio de Eficiência
+  if (stats.monthlyOrders > 100 && !stats.hasBottleneck) {
+     reports.push("EFICIÊNCIA ALTA: Volume considerável com tempo de preparo saudável.");
+  }
+
+  if (reports.length === 0) {
+    return `Este restaurante está consumindo cerca de ${(stats.monthlyOrders * 0.12).toFixed(2)} MB/dia em transações. Sua margem de segurança é robusta para a escala do plano ${pricing.tierId}.`;
+  }
+
+  return reports[0]; // Retorna o insight mais prioritário
+}
