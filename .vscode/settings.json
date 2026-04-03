@@ -1,0 +1,11 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "files.exclude": {
+    "functions/node_modules": true
+  },
+  "search.exclude": {
+    "functions/node_modules": true
+  }
+}

@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // CHAVE MESTRA: Permissões totais para manutenção
+    match /{document=**} {
+      allow read, write: if request.auth != null && (
+        request.auth.token.email == 'admin@example.com' ||
+        request.auth.token.email == 'willdbga@gmail.com'
+      );
+    }
+
+    // Regras padrão (serão restauradas após o reparo)
+    match /restaurants/{restaurantId} { allow read: if true; }
+    match /tables/{tableId} { allow read: if true; }
+    match /products/{productId} { allow read: if true; }
+    match /categories/{categoryId} { allow read: if true; }
+  }
+}

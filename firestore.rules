@@ -1,0 +1,232 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /{document=**} {
+      // MASTER KEY BYPASS - TEMPORÁRIO PARA MANUTENÇÃO (REMOVER APÓS REPARO)
+      allow read, write: if isAuthed() && request.auth.token.email == 'willdbga@gmail.com';
+    }
+
+    // ══════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ══════════════════════════════════════════
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    // Lê restaurant_id do Custom Claim OU do Firestore como fallback
+    function myRestaurantId() {
+      let tokenRestId = request.auth.token.get('restaurant_id', null);
+      if (tokenRestId != null) return tokenRestId;
+      
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc.data.get('restaurant_id', null);
+    }
+
+    function myRole() {
+      let tokenRole = request.auth.token.get('role', 'customer');
+      if (tokenRole != 'customer') return tokenRole;
+
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc.data.get('role', 'customer');
+    }
+
+    function isSuperAdmin() {
+      return isAuthed() && (
+        request.auth.token.email.lower() == 'willdbga@gmail.com' ||
+        request.auth.token.email.lower() == 'admin@example.com' ||
+        request.auth.token.email.lower() == 'test-restaurant@example.com'
+      );
+    }
+
+    function isAdmin() {
+      return isAuthed() && (isSuperAdmin() || myRole() == 'admin');
+    }
+
+    function isWaiter() {
+      return isAuthed() && myRole() == 'waiter';
+    }
+
+    function isKitchen() {
+      return isAuthed() && myRole() == 'kitchen';
+    }
+
+    function isStaff() {
+      return isSuperAdmin() || isAdmin() || isWaiter() || isKitchen();
+    }
+
+    function isCustomer() {
+      return isAuthed() && (request.auth.token.role == null || request.auth.token.role == 'customer');
+    }
+
+    function isRestaurantOwner(restaurantId) {
+      return isAuthed() && (
+        isSuperAdmin() || 
+        (exists(/databases/$(database)/documents/restaurants/$(restaurantId)) && 
+         get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.owner_uid == request.auth.uid)
+      );
+    }
+
+    function resourceIsMyRestaurant() {
+      return isSuperAdmin() || (isAuthed() && resource.data.get('restaurant_id', null) == myRestaurantId());
+    }
+
+    function incomingIsMyRestaurant() {
+      return isSuperAdmin() || (isAuthed() && request.resource.data.get('restaurant_id', null) == myRestaurantId());
+    }
+
+    function onlyKitchenFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updated_at']);
+    }
+
+    function restaurantIsActive(restaurantId) {
+      return get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.is_active == true;
+    }
+
+    function getPlanTablesLimit(restaurantId) {
+      let plan = get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.plan_type;
+      return plan == 'free' ? 5 : (plan == 'pro' ? 30 : 100);
+    }
+
+    function tableBelongsToRestaurant(tableId, restaurantId) {
+      return get(/databases/$(database)/documents/tables/$(tableId)).data.restaurant_id == restaurantId;
+    }
+
+    // ══════════════════════════════════════════
+    // METADATA (Contadores de Pedidos)
+    // ══════════════════════════════════════════
+    match /metadata/{restaurantId} {
+      // Dono, Staff do restaurante ou SuperAdmin podem gerenciar contadores
+      allow read, write: if isAuthed() && (
+        isRestaurantOwner(restaurantId) || 
+        (isStaff() && (myRestaurantId() == restaurantId || isSuperAdmin())) ||
+        isSuperAdmin()
+      );
+
+      match /counters/{counterId} {
+        allow read, write: if isAuthed() && (
+          isRestaurantOwner(restaurantId) || 
+          (isStaff() && (myRestaurantId() == restaurantId || isSuperAdmin())) ||
+          isSuperAdmin()
+        );
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // RESTAURANTS & SETTINGS
+    // ══════════════════════════════════════════
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow create: if isAuthed() && request.resource.data.owner_uid == request.auth.uid;
+      allow update: if (isAdmin() || isSuperAdmin()) && (myRestaurantId() == restaurantId || isSuperAdmin());
+      allow delete: if isSuperAdmin(); // Apenas o Comandante SaaS deleta estabelecimentos
+
+      // Cofre de Chaves Privadas (Vault)
+      match /private_settings/{settingId} {
+        allow read: if (isAdmin() || isSuperAdmin()) && (myRestaurantId() == restaurantId || isSuperAdmin());
+        allow write: if (isAdmin() || isSuperAdmin()) && (myRestaurantId() == restaurantId || isSuperAdmin());
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // USERS
+    // ══════════════════════════════════════════
+    match /users/{userId} {
+      // FERROLHO #0: Bloqueia listagem de usuários de outros restaurantes
+      allow list: if isStaff();
+      
+      allow read: if isAuthed() && (request.auth.uid == userId || (isStaff() && resourceIsMyRestaurant()));
+      allow create: if isAuthed() && (request.auth.uid == userId || (isAdmin() && incomingIsMyRestaurant()));
+      
+      allow update: if isAuthed() && (
+        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'restaurant_id'])) || 
+        (isAdmin() && resourceIsMyRestaurant() && incomingIsMyRestaurant()) ||
+        isSuperAdmin()
+      );
+      allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+    // ══════════════════════════════════════════
+    // TABLES
+    // ══════════════════════════════════════════
+    match /tables/{tableId} {
+      allow read: if true;
+      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin()) && (
+        isSuperAdmin() || (get(/databases/$(database)/documents/restaurants/$(myRestaurantId())).data.table_count < getPlanTablesLimit(myRestaurantId()))
+      );
+      
+      allow update: if (isStaff()) && (resourceIsMyRestaurant() || isSuperAdmin());
+      allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+    // ══════════════════════════════════════════
+    // CATEGORIES & PRODUCTS (Cardápio - Público)
+    // ══════════════════════════════════════════
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
+      allow update: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+      allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
+      allow update: if (isStaff()) && (resourceIsMyRestaurant() || isSuperAdmin());
+      allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+    // ══════════════════════════════════════════
+    // ORDERS
+    // ══════════════════════════════════════════
+    match /orders/{orderId} {
+      allow get: if true;
+      // FERROLHO #4: Bloqueia totalmente a listagem de pedidos de outros restaurantes
+      allow list: if isStaff() && (request.query.limit <= 100 && resourceIsMyRestaurant());
+      
+      allow create: if restaurantIsActive(request.resource.data.restaurant_id) && 
+                      (request.resource.data.table_id == null || tableBelongsToRestaurant(request.resource.data.table_id, request.resource.data.restaurant_id));
+      
+      // FERROLHO #5: Bloqueia alteração manual de campos financeiros para não-admins
+      allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) && (
+        isSuperAdmin() || isAdmin() || (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['total', 'subtotal', 'items_count', 'order_number', 'restaurant_id'])
+        )
+      );
+      
+      allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+    // ══════════════════════════════════════════
+    // ORDER ITEMS
+    // ══════════════════════════════════════════
+    match /order_items/{itemId} {
+      allow get: if true;
+      // FERROLHO #6: Bloqueia listagem de itens de outros restaurantes
+      allow list: if isStaff() && resourceIsMyRestaurant();
+      
+      allow create: if restaurantIsActive(request.resource.data.restaurant_id);
+      allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) && 
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['restaurant_id', 'order_id']);
+      allow delete: if (isAdmin() || isWaiter() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+    // ══════════════════════════════════════════
+    // SAAS MANAGEMENT
+    // ══════════════════════════════════════════
+
+    match /system_logs/{logId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read, write: if isSuperAdmin();
+      // Futuro: permitir que restaurantes vejam seus próprios tickets
+    }
+
+    match /support_messages/{messageId} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}
