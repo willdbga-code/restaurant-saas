@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useKDSItems } from "@/hooks/useKDSItems";
 import { useRestaurant } from "@/hooks/useRestaurant";
+import { playNotificationSound } from "@/lib/utils/sound";
 import { updateOrderItemStatus, approveItemCancellation, rejectItemCancellation } from "@/lib/firebase/orders";
 import type { OrderItem, OrderItemStatus } from "@/lib/firebase/orders";
 import { Loader2, ChefHat, Clock, Bell, CheckCheck, Utensils, Wifi, Printer, MapPin, XCircle, CheckCircle2, AlertCircle } from "lucide-react";
@@ -298,7 +299,10 @@ function KDSColumn({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function KDSPage() {
   const { user } = useAuth();
-  const { pending, preparing, ready, loading, error } = useKDSItems(user?.restaurant_id);
+  const { pending, preparing, ready, loading, error } = useKDSItems(user?.restaurant_id, () => {
+    playNotificationSound();
+    toast.info("Novo pedido na cozinha!", { duration: 5000 });
+  });
   const { restaurant } = useRestaurant(user?.restaurant_id);
   const [printItem, setPrintItem] = useState<OrderItem | null>(null);
 
@@ -351,8 +355,9 @@ export default function KDSPage() {
 
           {/* Connection status */}
           <div className="flex items-center gap-1.5 text-xs text-green-400">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
             <Wifi className="h-3.5 w-3.5" />
-            <span>Ao vivo</span>
+            <span>Sincronismo Ativo</span>
           </div>
 
           {/* Clock */}
