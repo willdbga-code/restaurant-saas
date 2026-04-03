@@ -354,7 +354,7 @@ function MenuContent({ slug }: { slug: string }) {
         if (!rest) { setStatus("error"); return; }
         setRestaurant(rest);
 
-        if (tableId && typeof tableId === "string") {
+        if (rest && rest.id && tableId && typeof tableId === "string") {
           const t = await getTable(rest.id, tableId);
           if (t) {
             setTable(t);
