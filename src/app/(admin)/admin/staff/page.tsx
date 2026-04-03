@@ -50,6 +50,7 @@ export default function StaffPage() {
       const inviteFn = httpsCallable(functions, "setCustomClaimsAndProfile");
       await inviteFn({
         action: "invite_staff",
+        restaurant_id: user?.restaurant_id,
         ...formData,
       });
       toast.success(`Membro ${formData.name} adicionado com sucesso!`);
@@ -125,7 +126,7 @@ export default function StaffPage() {
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name" className="text-zinc-300">Nomo Completo</Label>
+              <Label htmlFor="name" className="text-zinc-300">Nome Completo</Label>
               <Input
                 id="name"
                 value={formData.name}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Pencil, Trash2, Loader2, QrCode, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTables } from "@/hooks/useTables";
+import { useRestaurant } from "@/hooks/useRestaurant";
 import { addTable, updateTable, deleteTable, Table as RestTable } from "@/lib/firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,12 +51,14 @@ const STATUS_COLORS: Record<RestTable["status"], string> = {
 type FormData = { label: string; number: number; capacity: number };
 const emptyForm: FormData = { label: "", number: 1, capacity: 2 };
 
-// Mock: slug do restaurante (virá do perfil real na Fase 6)
-const RESTAURANT_SLUG = "demo-restaurante";
+// Removido Mock: const RESTAURANT_SLUG = "demo-restaurante";
 
 export default function TablesPage() {
   const { user } = useAuth();
+  const { restaurant } = useRestaurant(user?.restaurant_id);
   const { tables, loading } = useTables(user?.restaurant_id);
+
+  const restaurantSlug = restaurant?.slug || "demo-restaurante";
 
   const [open, setOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RestTable | null>(null);
@@ -80,7 +83,7 @@ export default function TablesPage() {
     setSaving(true);
     try {
       if (editTarget) {
-        const qr_target_url = `/menu/${RESTAURANT_SLUG}?table=${editTarget.id}`;
+        const qr_target_url = `/menu/${restaurantSlug}?table=${editTarget.id}`;
         await updateTable(editTarget.id, { 
           label: form.label, 
           number: form.number, 
@@ -101,7 +104,7 @@ export default function TablesPage() {
         });
         // Atualiza com o ID real para o QR sincronizar
         await updateTable(docRef.id, { 
-          qr_target_url: `/menu/${RESTAURANT_SLUG}?table=${docRef.id}` 
+          qr_target_url: `/menu/${restaurantSlug}?table=${docRef.id}` 
         });
         toast.success("Mesa criada!");
       }

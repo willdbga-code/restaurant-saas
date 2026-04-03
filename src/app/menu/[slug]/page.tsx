@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, use, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { onSnapshot, doc, query, collection, where, getDocs, orderBy } from "firebase/firestore";
+import { onSnapshot, doc, query, collection, where, getDocs, orderBy, addDoc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase/config";
 import { signInAnonymously } from "firebase/auth";
 import { createCustomerCheckoutLink } from "@/app/actions/checkout";
@@ -12,7 +12,7 @@ import { useActiveOrder } from "@/hooks/useActiveOrder";
 import { OrderStatusOverlay } from "@/components/menu/OrderStatusOverlay";
 import { OrderDetailsDrawer } from "@/components/menu/OrderDetailsDrawer";
 import { PaymentDrawer } from "@/components/menu/PaymentDrawer";
-import type { Category, Product, Table, Restaurant } from "@/lib/firebase/firestore";
+import { Category, Product, Table, Restaurant, updateTable } from "@/lib/firebase/firestore";
 import { ShoppingCart, Plus, Minus, MapPin, X, Check, Loader2, UtensilsCrossed, Settings2, Trash2, ArrowRight, ChefHat, Lock, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -461,6 +461,31 @@ function MenuContent({ slug }: { slug: string }) {
     return () => currentRefs.forEach(el => observer.unobserve(el));
   }, [status, categories]);
 
+  async function handleRequestOpen() {
+    const finalTableId = table?.id || tableId;
+    if (!finalTableId || !restaurant) return;
+    
+    setSubmitting(true);
+    try {
+      // Cria um alerta/solicitação para o garçom
+      await addDoc(collection(db, "table_alerts"), {
+        restaurant_id: restaurant.id,
+        table_id: finalTableId,
+        table_label: tableLabel || "Mesa",
+        type: "opening_request",
+        status: "pending",
+        created_at: serverTimestamp()
+      });
+      
+      toast.success("Solicitação enviada! Um garçom virá até você.");
+    } catch (err) {
+      console.error("Erro ao solicitar abertura:", err);
+      toast.error("Erro ao enviar solicitação. Por favor, chame um garçom.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function scrollToCategory(catId: string) {
     setActiveCatId(catId);
     const element = sectionRefs.current.get(catId);
@@ -609,14 +634,25 @@ function MenuContent({ slug }: { slug: string }) {
         </div>
         
         <h1 className="text-4xl font-black text-white leading-tight tracking-tighter mb-4">Mesa Bloqueada</h1>
-        <p className="text-zinc-500 text-lg font-medium leading-relaxed max-w-xs">
+        <p className="text-zinc-500 text-lg font-medium leading-relaxed max-w-xs mb-8">
           Esta mesa ({tableLabel}) ainda não foi aberta. <br/>
-          <span className="text-primary-theme font-bold">Chame um garçom para liberar o seu acesso.</span>
+          <span className="text-primary-theme font-bold">Solicite a abertura para fazer o seu pedido.</span>
         </p>
 
-        <div className="mt-12 p-6 glass-morphism rounded-3xl w-full max-w-xs border border-white/5 shadow-2xl">
-           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 mb-2">Status da Mesa</p>
-           <p className="text-sm font-bold text-white uppercase italic">Aguardando Liberação Operacional</p>
+        <div className="w-full max-w-xs space-y-4">
+          <button 
+            onClick={handleRequestOpen}
+            disabled={submitting}
+            className="w-full bg-primary-theme text-white rounded-3xl py-6 font-black text-xl shadow-2xl shadow-primary-theme/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+          >
+            {submitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <ChefHat className="h-6 w-6" />}
+            Solicitar Abertura
+          </button>
+
+          <div className="p-6 glass-morphism rounded-3xl w-full border border-white/5 shadow-2xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 mb-2">Segurança de Acesso</p>
+            <p className="text-sm font-bold text-white uppercase italic">Liberação exclusiva pelo garçom</p>
+          </div>
         </div>
       </div>
     );
@@ -652,7 +688,10 @@ function MenuContent({ slug }: { slug: string }) {
         <ThemeInjector color={restaurant?.branding?.primary_color} />
         <LandingHero 
            restaurant={restaurant!} 
-           onEnter={() => { setShowLanding(false); window.scrollTo(0,0); }} 
+           onEnter={() => { 
+             setShowLanding(false); 
+             window.scrollTo(0,0);
+           }} 
         />
       </>
     );

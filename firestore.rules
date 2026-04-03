@@ -161,6 +161,17 @@ service cloud.firestore {
     }
 
     // ══════════════════════════════════════════
+    // TABLE ALERTS (Solicitações de Abertura)
+    // ══════════════════════════════════════════
+    match /table_alerts/{alertId} {
+      // Clientes podem criar alertas de abertura
+      allow create: if true;
+      // Apenas staff pode ver e resolver alertas de seu restaurante
+      allow read, update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin());
+      allow delete: if isAdmin() || isSuperAdmin();
+    }
+
+    // ══════════════════════════════════════════
     // CATEGORIES & PRODUCTS (Cardápio - Público)
     // ══════════════════════════════════════════
     match /categories/{categoryId} {

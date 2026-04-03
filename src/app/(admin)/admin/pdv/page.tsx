@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTables } from "@/hooks/useTables";
-import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check } from "lucide-react";
+import { onSnapshot, collection, query, where, doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { updateTable } from "@/lib/firebase/firestore";
@@ -20,12 +22,22 @@ const STATUS_CFG: Record<Table["status"], { label: string; border: string; badge
   cleaning:  { label: "Limpeza", border: "border-blue-500/40 hover:border-blue-400 hover:bg-blue-500/10", badge: "bg-blue-500/20 text-blue-400" },
 };
 
+interface TableAlert {
+  id: string;
+  table_id: string;
+  table_label: string;
+  restaurant_id: string;
+  status: "pending" | "resolved";
+  created_at: any;
+}
+
 export default function PDVPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { tables, loading } = useTables(user?.restaurant_id);
   const [scanOpen, setScanOpen] = useState(false);
   const [scannedTable, setScannedTable] = useState<Table | null>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   // Scanner Logic
   useEffect(() => {
@@ -44,7 +56,7 @@ export default function PDVPage() {
               const url = new URL(decodedText);
               const tableIdOrNum = url.searchParams.get("table");
               if (tableIdOrNum) {
-                const table = tables.find(t => t.id === tableIdOrNum || t.number === Number(tableIdOrNum));
+                const table = tables.find((t: Table) => t.id === tableIdOrNum || t.number === Number(tableIdOrNum));
                 if (table) {
                   setScannedTable(table);
                   scanner?.clear();
@@ -67,9 +79,43 @@ export default function PDVPage() {
     };
   }, [scanOpen, tables]);
 
+  // Listener de Alertas de Mesa (Pedidos de Abertura)
+  useEffect(() => {
+    if (!user?.restaurant_id) return;
+
+    const q = query(
+      collection(db, "table_alerts"),
+      where("restaurant_id", "==", user.restaurant_id),
+      where("status", "==", "pending")
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const newAlerts = snap.docs.map(d => ({ id: d.id, ...d.data() } as TableAlert));
+      setAlerts(newAlerts);
+      
+      // Toast opcional para novos alertas
+      if (newAlerts.length > alerts.length) {
+        const latest = newAlerts[0];
+        toast.info(`Pedido de abertura: ${latest.table_label}`, {
+          description: "Um cliente está aguardando liberação.",
+          duration: 5000,
+        });
+      }
+    });
+
+    return () => unsub();
+  }, [user?.restaurant_id]);
+
   async function handleOpenTable(table: Table) {
     try {
       await updateTable(table.id, { status: "occupied" });
+      
+      // Limpa os alertas vinculados a essa mesa
+      const tableAlerts = alerts.filter((a: TableAlert) => a.table_id === table.id);
+      await Promise.all(tableAlerts.map((auth: TableAlert) => 
+        updateDoc(doc(db, "table_alerts", auth.id), { status: "resolved" })
+      ));
+
       toast.success(`Mesa ${table.number} aberta!`);
       setScanOpen(false);
       setScannedTable(null);
@@ -116,7 +162,7 @@ export default function PDVPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {tables.map((table) => {
+          {tables.map((table: Table) => {
             const cfg = STATUS_CFG[table.status];
             return (
               <button
@@ -124,9 +170,15 @@ export default function PDVPage() {
                 onClick={() => router.push(`/admin/pdv/${table.id}`)}
                 className={cn(
                   "group relative flex flex-col items-center justify-center rounded-2xl border-2 bg-zinc-900 p-6 text-center transition-all duration-200",
-                  cfg.border
+                  cfg.border,
+                  alerts.some((a: TableAlert) => a.table_id === table.id) && "ring-2 ring-orange-500 ring-offset-2 ring-offset-zinc-950 animate-pulse"
                 )}
               >
+                {alerts.some((a: TableAlert) => a.table_id === table.id) && (
+                   <div className="absolute -left-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 shadow-lg ring-4 ring-zinc-950">
+                      <Bell className="h-4 w-4 text-white animate-bounce" />
+                   </div>
+                )}
                 <span className={cn("absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", cfg.badge)}>
                   {cfg.label}
                 </span>

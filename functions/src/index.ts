@@ -75,6 +75,10 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
       }
     }
 
+    if (!myRestaurantId && data.restaurant_id) {
+      myRestaurantId = data.restaurant_id;
+    }
+
     if (myRole !== "admin") {
       throw new HttpsError("permission-denied", "Apenas admins do restaurante autorizados.");
     }
