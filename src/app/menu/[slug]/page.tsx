@@ -7,7 +7,7 @@ import { db, auth } from "@/lib/firebase/config";
 import { signInAnonymously } from "firebase/auth";
 import { createCustomerCheckoutLink } from "@/app/actions/checkout";
 import { getRestaurantBySlug, getMenuCategories, getMenuProducts, getTableById } from "@/lib/firebase/menu";
-import { createOrder, addOrderItem } from "@/lib/firebase/orders";
+import { createOrder, addOrderItem, notifyPaymentActivity } from "@/lib/firebase/orders";
 import { useActiveOrder } from "@/hooks/useActiveOrder";
 import { OrderStatusOverlay } from "@/components/menu/OrderStatusOverlay";
 import { OrderDetailsDrawer } from "@/components/menu/OrderDetailsDrawer";
@@ -475,6 +475,13 @@ function MenuContent({ slug }: { slug: string }) {
         type: "opening_request",
         status: "pending",
         created_at: serverTimestamp()
+      });
+
+      // Cria a notificação global no sino (Bell)
+      await notifyPaymentActivity({
+        restaurantId: restaurant.id as string,
+        tableLabel: tableLabel || "Mesa",
+        type: "table_opening_request",
       });
       
       toast.success("Solicitação enviada! Um garçom virá até você.");

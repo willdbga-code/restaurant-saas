@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { onSnapshot, collection, query, where, orderBy, limit, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import { Bell, CreditCard, Users, CheckCircle2, X } from "lucide-react";
+import { Bell, CreditCard, Users, CheckCircle2, Lock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/firebase/orders";
 
@@ -49,6 +49,7 @@ export function NotificationFeed({ restaurantId }: { restaurantId: string | unde
     payment_started: { icon: Users, color: "text-blue-400 bg-blue-500/10", label: "Divisão iniciada" },
     payment_partial: { icon: CreditCard, color: "text-orange-400 bg-orange-500/10", label: "Pagamento parcial" },
     payment_completed: { icon: CheckCircle2, color: "text-green-400 bg-green-500/10", label: "Mesa liquidada" },
+    table_opening_request: { icon: Lock, color: "text-red-400 bg-red-500/10", label: "Abertura de Mesa" },
   };
 
   return (
@@ -110,6 +111,7 @@ export function NotificationFeed({ restaurantId }: { restaurantId: string | unde
                           {n.type === "payment_partial" && ` pagou ${fmt(n.amount || 0)}`}
                           {n.type === "payment_completed" && ` finalizou a conta`}
                           {n.type === "payment_started" && ` abriu divisão de conta`}
+                          {n.type === "table_opening_request" && ` solicitou liberação de acesso`}
                         </p>
                         <p className="text-[10px] text-zinc-600 mt-2 font-medium">
                           {n.created_at?.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}

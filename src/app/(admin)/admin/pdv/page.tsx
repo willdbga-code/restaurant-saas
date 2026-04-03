@@ -6,7 +6,7 @@ import { useTables } from "@/hooks/useTables";
 import { onSnapshot, collection, query, where, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { playNotificationSound } from "@/lib/utils/sound";
-import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check, Bell } from "lucide-react";
+import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check, Bell, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { updateTable } from "@/lib/firebase/firestore";
@@ -159,6 +159,47 @@ export default function PDVPage() {
           </Button>
         </div>
       </div>
+
+      {/* Sessão de Urgência: Pendências de Abertura */}
+      {alerts.length > 0 && (
+        <div className="mb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <div className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+            <h2 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Solicitações de Abertura</h2>
+            <span className="ml-auto text-[10px] font-black text-zinc-600 uppercase tabular-nums">{alerts.length} pendentes</span>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {alerts.map((alert: TableAlert) => {
+              const tableObj = tables.find((t: Table) => t.id === alert.table_id);
+              return (
+                <div 
+                  key={alert.id}
+                  className="flex items-center justify-between p-4 rounded-3xl bg-red-500/5 border border-red-500/10 shadow-2xl transition-all hover:bg-red-500/10 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-2xl bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/20 group-hover:scale-110 transition-transform">
+                       <Lock className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                       <p className="text-xs font-black text-white uppercase tracking-tight">{alert.table_label}</p>
+                       <p className="text-[9px] text-red-400/60 font-black uppercase tracking-widest mt-0.5">Aguardando garçom</p>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => tableObj && handleOpenTable(tableObj)}
+                    className="bg-white text-black h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-100 active:scale-95 transition-all shadow-xl"
+                  >
+                    Liberar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="h-px bg-zinc-800/50 mt-10" />
+        </div>
+      )}
 
       {tables.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-24">

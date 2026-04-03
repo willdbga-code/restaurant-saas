@@ -331,9 +331,9 @@ export type OrderPayment = {
 export type Notification = {
   id: string;
   restaurant_id: string;
-  type: "payment_started" | "payment_partial" | "payment_completed";
+  type: "payment_started" | "payment_partial" | "payment_completed" | "table_opening_request";
   table_label: string;
-  order_id: string;
+  order_id?: string; // Agora opcional para alertas de abertura
   amount?: number;
   is_read: boolean;
   created_at: Timestamp;
@@ -343,14 +343,14 @@ export type Notification = {
 
 export const notifyPaymentActivity = async (p: {
   restaurantId: string;
-  orderId: string;
+  orderId?: string;
   tableLabel: string;
   type: Notification["type"];
   amount?: number;
 }) => {
   await addDoc(collection(db, "notifications"), {
     restaurant_id: p.restaurantId,
-    order_id: p.orderId,
+    order_id: p.orderId || null,
     table_label: p.tableLabel,
     type: p.type,
     amount: p.amount || 0,
