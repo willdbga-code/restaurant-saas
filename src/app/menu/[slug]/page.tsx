@@ -483,6 +483,8 @@ function MenuContent({ slug }: { slug: string }) {
         tableLabel: tableLabel || "Mesa",
         type: "table_opening_request",
       });
+      // Atualiza o status da mesa para 'reserved' para sinalizar no PDV
+      await updateTable(finalTableId, { status: "reserved" });
       
       toast.success("Solicitação enviada! Um garçom virá até você.");
     } catch (err) {
