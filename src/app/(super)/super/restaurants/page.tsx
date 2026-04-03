@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onSnapshot, collection, query, orderBy, doc, updateDoc } from "firebase/firestore";
+import { onSnapshot, collection, query, orderBy, doc, updateDoc, setDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Restaurant } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
@@ -14,6 +14,7 @@ import { calculatePlanPricing, PlanTier } from "@/lib/utils/pricing";
 
 export default function SuperRestaurantsPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [pulseStats, setPulseStats] = useState<any>({ total_restaurants: 0, active_restaurants: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -21,12 +22,39 @@ export default function SuperRestaurantsPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // 1. Monitorar Estatísticas Globais (Pulse)
+    const unsubPulse = onSnapshot(doc(db, "metadata", "system"), (snap) => {
+      if (snap.exists()) {
+        setPulseStats(snap.data());
+      }
+    });
+
+    // 2. Monitorar Lista de Restaurantes
     const q = query(collection(db, "restaurants"), orderBy("created_at", "desc"));
-    return onSnapshot(q, (snap) => {
+    const unsubList = onSnapshot(q, (snap) => {
       setRestaurants(snap.docs.map(d => ({ id: d.id, ...d.data() } as Restaurant)));
       setLoading(false);
     });
+
+    return () => {
+      unsubPulse();
+      unsubList();
+    };
   }, []);
+
+  // 3. Auto-Bootstrap dos Metadados (Apenas se estiverem vazios e carregarmos a lista)
+  useEffect(() => {
+    if (!loading && restaurants.length > 0 && pulseStats.total_restaurants === 0) {
+      const systemRef = doc(db, "metadata", "system");
+      const active = restaurants.filter(r => r.is_active).length;
+      
+      setDoc(systemRef, {
+        total_restaurants: restaurants.length,
+        active_restaurants: active,
+        updated_at: Timestamp.now()
+      }, { merge: true }).catch(err => console.error("Pulse Bootstrap Error:", err));
+    }
+  }, [loading, restaurants, pulseStats.total_restaurants]);
 
   const toggleStatus = async (id: string, current: boolean) => {
     try {
@@ -106,8 +134,8 @@ export default function SuperRestaurantsPage() {
                <Globe className="h-16 w-16 text-white" />
             </div>
             <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-1">Clientes Ativos</p>
-            <p className="text-3xl font-black text-white tracking-tighter">{restaurants.filter(r => r.is_active).length}</p>
-            <p className="text-[9px] text-zinc-600 font-bold mt-2 uppercase tracking-tight">Total de {restaurants.length} cadastros</p>
+            <p className="text-3xl font-black text-white tracking-tighter">{pulseStats.active_restaurants || 0}</p>
+            <p className="text-[9px] text-zinc-600 font-bold mt-2 uppercase tracking-tight">Total de {pulseStats.total_restaurants || 0} cadastros</p>
          </div>
 
          <div className="glass-morphism border border-white/10 p-6 rounded-[2rem] relative overflow-hidden group hover:scale-[1.02] transition-all">

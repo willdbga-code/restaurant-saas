@@ -1,8 +1,11 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 
-admin.initializeApp();
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 const db = admin.firestore();
 
 // 1. Atribuição de Custom Claims e Profile (Callable)
@@ -158,3 +161,41 @@ export const assignSequentialOrderNumber = onDocumentCreated(
 // 3. Billing & SaaS Automation (Webhooks)
 export { stripeWebhook } from "./billing";
 export { infinitepayWebhook } from "./infinitepay";
+/**
+ * SAAS MASTER COUNTERS (Pulse)
+ * Mantém contadores globais sincronizados em tempo real.
+ */
+export const onRestaurantCreatedPulse = onDocumentCreated("restaurants/{restaurantId}", async (event) => {
+  const systemRef = db.collection("metadata").doc("system");
+  
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(systemRef);
+    const data = snap.data() || { total_restaurants: 0, active_restaurants: 0 };
+    
+    transaction.set(systemRef, {
+      total_restaurants: (data.total_restaurants || 0) + 1,
+      active_restaurants: (data.active_restaurants || 0) + 1,
+      updated_at: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  
+  logger.info("Pulse: Contador de restaurantes incrementado");
+});
+
+export const onRestaurantDeletedPulse = onDocumentDeleted("restaurants/{restaurantId}", async (event) => {
+  const systemRef = db.collection("metadata").doc("system");
+  
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(systemRef);
+    const data = snap.data();
+    if (!data) return;
+    
+    transaction.set(systemRef, {
+      total_restaurants: Math.max(0, (data.total_restaurants || 1) - 1),
+      active_restaurants: Math.max(0, (data.active_restaurants || 1) - 1),
+      updated_at: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  
+  logger.info("Pulse: Contador de restaurantes decrementado");
+});
