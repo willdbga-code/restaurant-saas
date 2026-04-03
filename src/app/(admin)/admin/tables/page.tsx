@@ -58,7 +58,7 @@ export default function TablesPage() {
   const { restaurant } = useRestaurant(user?.restaurant_id);
   const { tables, loading } = useTables(user?.restaurant_id);
 
-  const restaurantSlug = restaurant?.slug || "demo-restaurante";
+  const restaurantSlug = restaurant?.slug;
 
   const [open, setOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RestTable | null>(null);
@@ -80,6 +80,10 @@ export default function TablesPage() {
 
   async function handleSave() {
     if (!form.label.trim() || !user?.restaurant_id) return;
+    if (!restaurantSlug) {
+      toast.error("Erro: Slug do restaurante não carregado. Tente novamente em instantes.");
+      return;
+    }
     setSaving(true);
     try {
       if (editTarget) {

@@ -38,9 +38,34 @@ export async function getMenuProducts(restaurantId: string): Promise<Product[]> 
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
 }
 
-// Busca mesa pelo ID para exibir o label ao cliente
-export async function getTableById(tableId: string): Promise<Table | null> {
-  const snap = await getDoc(doc(db, "tables", tableId));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Table;
+// Busca mesa pelo ID ou Número, garantindo que pertença ao restaurante correto
+export async function getTable(restaurantId: string, tableIdOrNumber: string): Promise<Table | null> {
+  // Primeiro tenta buscar por ID direto (mais performático)
+  const docRef = doc(db, "tables", tableIdOrNumber);
+  const snap = await getDoc(docRef);
+  
+  if (snap.exists()) {
+    const data = snap.data() as Table;
+    // Validação crucial de multitenancy: o restaurant_id deve bater!
+    if (data.restaurant_id === restaurantId) {
+      return { ...data, id: snap.id } as Table;
+    }
+  }
+
+  // Se não encontrou por ID, tenta buscar por número (número da mesa)
+  const num = Number(tableIdOrNumber);
+  if (!isNaN(num)) {
+    const q = query(
+      collection(db, "tables"),
+      where("restaurant_id", "==", restaurantId),
+      where("number", "==", num)
+    );
+    const qSnap = await getDocs(q);
+    if (!qSnap.empty) {
+      const d = qSnap.docs[0];
+      return { id: d.id, ...d.data() } as Table;
+    }
+  }
+
+  return null;
 }

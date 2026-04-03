@@ -6,7 +6,7 @@ import { onSnapshot, doc, query, collection, where, getDocs, orderBy, addDoc, se
 import { db, auth } from "@/lib/firebase/config";
 import { signInAnonymously } from "firebase/auth";
 import { createCustomerCheckoutLink } from "@/app/actions/checkout";
-import { getRestaurantBySlug, getMenuCategories, getMenuProducts, getTableById } from "@/lib/firebase/menu";
+import { getRestaurantBySlug, getMenuCategories, getMenuProducts, getTable } from "@/lib/firebase/menu";
 import { createOrder, addOrderItem, notifyPaymentActivity } from "@/lib/firebase/orders";
 import { useActiveOrder } from "@/hooks/useActiveOrder";
 import { OrderStatusOverlay } from "@/components/menu/OrderStatusOverlay";
@@ -354,23 +354,11 @@ function MenuContent({ slug }: { slug: string }) {
         if (!rest) { setStatus("error"); return; }
         setRestaurant(rest);
 
-        if (tableId) {
-          const t = await getTableById(tableId);
+        if (tableId && typeof tableId === "string") {
+          const t = await getTable(rest.id, tableId);
           if (t) {
             setTable(t);
             setTableLabel(t.label);
-          } else {
-            const q = query(
-              collection(db, "tables"), 
-              where("restaurant_id", "==", rest.id),
-              where("number", "==", Number(tableId))
-            );
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-               const tableData = { id: snap.docs[0].id, ...snap.docs[0].data() } as Table;
-               setTable(tableData);
-               setTableLabel(tableData.label);
-            }
           }
         }
 
