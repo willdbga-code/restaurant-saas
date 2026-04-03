@@ -240,8 +240,8 @@ export default function ProductsPage() {
         </Button>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900">
+      {/* Responsive View: Table for Desktop, Cards for Mobile */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-orange-400" />
@@ -251,75 +251,132 @@ export default function ProductsPage() {
             Nenhum produto ainda. Clique em &quot;Novo Produto&quot; para começar.
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-zinc-800">
-                <TableHead className="text-zinc-400">Foto</TableHead>
-                <TableHead className="text-zinc-400">Nome</TableHead>
-                <TableHead className="text-zinc-400">Categoria</TableHead>
-                <TableHead className="text-zinc-400">Preço</TableHead>
-                <TableHead className="text-zinc-400">Ingredientes</TableHead>
-                <TableHead className="text-zinc-400">Destaque</TableHead>
-                <TableHead className="text-zinc-400">Disponível</TableHead>
-                <TableHead className="text-right text-zinc-400">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-zinc-800">
+                    <TableHead className="text-zinc-400">Foto</TableHead>
+                    <TableHead className="text-zinc-400">Nome</TableHead>
+                    <TableHead className="text-zinc-400">Categoria</TableHead>
+                    <TableHead className="text-zinc-400">Preço</TableHead>
+                    <TableHead className="text-zinc-400">Ingredientes</TableHead>
+                    <TableHead className="text-zinc-400">Destaque</TableHead>
+                    <TableHead className="text-zinc-400">Disponível</TableHead>
+                    <TableHead className="text-right text-zinc-400">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {products.map((p) => (
+                    <TableRow key={p.id} className="border-zinc-800 hover:bg-zinc-800/50">
+                      <TableCell>
+                        {p.image_url ? (
+                          <img src={p.image_url} alt={p.name} className="h-12 w-12 rounded-lg object-cover border border-zinc-700" />
+                        ) : (
+                          <div className="h-12 w-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                            <ChefHat className="h-5 w-5 text-zinc-600" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium text-white">{p.name}</TableCell>
+                      <TableCell className="text-zinc-400">{getCategoryName(p.category_id)}</TableCell>
+                      <TableCell className="text-zinc-300">{formatPrice(p.price)}</TableCell>
+                      <TableCell>
+                        {p.ingredients && p.ingredients.length > 0 ? (
+                          <span className="text-xs text-zinc-400">{p.ingredients.length} itens</span>
+                        ) : (
+                          <span className="text-xs text-zinc-600">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p.is_featured && (
+                          <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 px-2 py-0.5 rounded-full">
+                            <Sparkles className="h-3 w-3 mr-1" /> Sim
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          onClick={() => handleToggleAvailable(p)}
+                          className="flex items-center gap-1 text-sm transition-colors"
+                        >
+                          {p.is_available ? (
+                            <><ToggleRight className="h-5 w-5 text-green-400" /><span className="text-green-400">Sim</span></>
+                          ) : (
+                            <><ToggleLeft className="h-5 w-5 text-zinc-500" /><span className="text-zinc-500">Não</span></>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="icon" variant="ghost" onClick={() => openEdit(p)} className="h-8 w-8 text-zinc-400 hover:text-white">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => handleDelete(p)} className="h-8 w-8 text-zinc-400 hover:text-red-400">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="grid grid-cols-1 divide-y divide-zinc-800 md:hidden">
               {products.map((p) => (
-                <TableRow key={p.id} className="border-zinc-800 hover:bg-zinc-800/50">
-                  <TableCell>
-                    {p.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.image_url} alt={p.name} className="h-12 w-12 rounded-lg object-cover border border-zinc-700" />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center">
-                        <ChefHat className="h-5 w-5 text-zinc-600" />
+                <div key={p.id} className="p-4 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex gap-3">
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name} className="h-14 w-14 rounded-xl object-cover border border-zinc-800" />
+                      ) : (
+                        <div className="h-14 w-14 rounded-xl bg-zinc-800 border border-zinc-800 flex items-center justify-center">
+                          <ChefHat className="h-6 w-6 text-zinc-600" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-white leading-tight truncate">{p.name}</h4>
+                          {p.is_featured && <Sparkles className="h-3 w-3 text-orange-400 shrink-0" />}
+                        </div>
+                        <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-wider">{getCategoryName(p.category_id)}</p>
+                        <p className="text-sm font-bold text-orange-400 mt-1">{formatPrice(p.price)}</p>
                       </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium text-white">{p.name}</TableCell>
-                  <TableCell className="text-zinc-400">{getCategoryName(p.category_id)}</TableCell>
-                  <TableCell className="text-zinc-300">{formatPrice(p.price)}</TableCell>
-                  <TableCell>
-                    {p.ingredients && p.ingredients.length > 0 ? (
-                      <span className="text-xs text-zinc-400">{p.ingredients.length} itens</span>
-                    ) : (
-                      <span className="text-xs text-zinc-600">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {p.is_featured && (
-                      <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 px-2 py-0.5 rounded-full">
-                        <Sparkles className="h-3 w-3 mr-1" /> Sim
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
+                    </div>
+                    
                     <button
                       onClick={() => handleToggleAvailable(p)}
-                      className="flex items-center gap-1 text-sm transition-colors"
+                      className="shrink-0"
                     >
                       {p.is_available ? (
-                        <><ToggleRight className="h-5 w-5 text-green-400" /><span className="text-green-400">Sim</span></>
+                         <ToggleRight className="h-6 w-6 text-green-400" />
                       ) : (
-                        <><ToggleLeft className="h-5 w-5 text-zinc-500" /><span className="text-zinc-500">Não</span></>
+                         <ToggleLeft className="h-6 w-6 text-zinc-700" />
                       )}
                     </button>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(p)} className="h-8 w-8 text-zinc-400 hover:text-white">
-                        <Pencil className="h-4 w-4" />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="flex gap-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                       <span>Ordem: {p.sort_order}</span>
+                       {p.track_stock && <span>Estoque: {p.stock}</span>}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => openEdit(p)} className="h-9 px-4 rounded-xl bg-zinc-800 text-white border-zinc-700">
+                        <Pencil className="mr-2 h-3.5 w-3.5" /> Editar
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDelete(p)} className="h-8 w-8 text-zinc-400 hover:text-red-400">
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(p)} className="h-9 w-9 p-0 text-zinc-500 hover:text-red-400">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </>
         )}
       </div>
 

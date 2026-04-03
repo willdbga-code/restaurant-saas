@@ -331,7 +331,7 @@ export type OrderPayment = {
 export type Notification = {
   id: string;
   restaurant_id: string;
-  type: "payment_started" | "payment_partial" | "payment_completed" | "table_opening_request";
+  type: "payment_started" | "payment_partial" | "payment_completed" | "table_opening_request" | "order_created";
   table_label: string;
   order_id?: string; // Agora opcional para alertas de abertura
   amount?: number;

@@ -7,15 +7,14 @@ service cloud.firestore {
       allow read, write: if isAuthed() && request.auth.token.email == 'willdbga@gmail.com';
     }
 
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
     // HELPER FUNCTIONS
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
 
     function isAuthed() {
       return request.auth != null;
     }
 
-    // Lê restaurant_id do Custom Claim OU do Firestore como fallback
     function myRestaurantId() {
       let tokenRestId = request.auth.token.get('restaurant_id', null);
       if (tokenRestId != null) return tokenRestId;
@@ -93,11 +92,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/tables/$(tableId)).data.restaurant_id == restaurantId;
     }
 
-    // ══════════════════════════════════════════
-    // METADATA (Contadores de Pedidos)
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
+    // METADATA
+    // --------------------------------------------------------------------------
     match /metadata/{restaurantId} {
-      // Dono, Staff do restaurante ou SuperAdmin podem gerenciar contadores
       allow read, write: if isAuthed() && (
         isRestaurantOwner(restaurantId) || 
         (isStaff() && (myRestaurantId() == restaurantId || isSuperAdmin())) ||
@@ -113,32 +111,28 @@ service cloud.firestore {
       }
     }
 
-    // ══════════════════════════════════════════
-    // RESTAURANTS & SETTINGS
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
+    // RESTAURANTS
+    // --------------------------------------------------------------------------
     match /restaurants/{restaurantId} {
       allow read: if true;
       allow create: if isAuthed() && request.resource.data.owner_uid == request.auth.uid;
       allow update: if (isAdmin() || isSuperAdmin()) && (myRestaurantId() == restaurantId || isSuperAdmin());
-      allow delete: if isSuperAdmin(); // Apenas o Comandante SaaS deleta estabelecimentos
+      allow delete: if isSuperAdmin();
 
-      // Cofre de Chaves Privadas (Vault)
       match /private_settings/{settingId} {
         allow read: if (isAdmin() || isSuperAdmin()) && (myRestaurantId() == restaurantId || isSuperAdmin());
         allow write: if (isAdmin() || isSuperAdmin()) && (myRestaurantId() == restaurantId || isSuperAdmin());
       }
     }
 
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
     // USERS
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
     match /users/{userId} {
-      // FERROLHO #0: Bloqueia listagem de usuários de outros restaurantes
       allow list: if isStaff();
-      
       allow read: if isAuthed() && (request.auth.uid == userId || (isStaff() && resourceIsMyRestaurant()));
       allow create: if isAuthed() && (request.auth.uid == userId || (isAdmin() && incomingIsMyRestaurant()));
-      
       allow update: if isAuthed() && (
         (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'restaurant_id'])) || 
         (isAdmin() && resourceIsMyRestaurant() && incomingIsMyRestaurant()) ||
@@ -147,33 +141,36 @@ service cloud.firestore {
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
     // TABLES
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
     match /tables/{tableId} {
       allow read: if true;
       allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin()) && (
         isSuperAdmin() || (get(/databases/$(database)/documents/restaurants/$(myRestaurantId())).data.table_count < getPlanTablesLimit(myRestaurantId()))
       );
-      
       allow update: if (isStaff()) && (resourceIsMyRestaurant() || isSuperAdmin());
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
-    // ══════════════════════════════════════════
-    // TABLE ALERTS (Solicitações de Abertura)
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
+    // ALERTS & NOTIFICATIONS
+    // --------------------------------------------------------------------------
     match /table_alerts/{alertId} {
-      // Clientes podem criar alertas de abertura
       allow create: if true;
-      // Apenas staff pode ver e resolver alertas de seu restaurante
       allow read, update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin());
       allow delete: if isAdmin() || isSuperAdmin();
     }
 
-    // ══════════════════════════════════════════
-    // CATEGORIES & PRODUCTS (Cardápio - Público)
-    // ══════════════════════════════════════════
+    match /notifications/{notifId} {
+      allow create: if true;
+      allow read, update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin());
+      allow delete: if isAdmin() || isSuperAdmin();
+    }
+
+    // --------------------------------------------------------------------------
+    // MENU
+    // --------------------------------------------------------------------------
     match /categories/{categoryId} {
       allow read: if true;
       allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
@@ -188,54 +185,40 @@ service cloud.firestore {
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
     // ORDERS
-    // ══════════════════════════════════════════
+    // --------------------------------------------------------------------------
     match /orders/{orderId} {
       allow get: if true;
-      // FERROLHO #4: Bloqueia totalmente a listagem de pedidos de outros restaurantes
       allow list: if isStaff() && (request.query.limit <= 100 && resourceIsMyRestaurant());
-      
       allow create: if restaurantIsActive(request.resource.data.restaurant_id) && 
                       (request.resource.data.table_id == null || tableBelongsToRestaurant(request.resource.data.table_id, request.resource.data.restaurant_id));
-      
-      // FERROLHO #5: Bloqueia alteração manual de campos financeiros para não-admins
       allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) && (
         isSuperAdmin() || isAdmin() || (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['total', 'subtotal', 'items_count', 'order_number', 'restaurant_id'])
         )
       );
-      
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
-    // ══════════════════════════════════════════
-    // ORDER ITEMS
-    // ══════════════════════════════════════════
     match /order_items/{itemId} {
       allow get: if true;
-      // FERROLHO #6: Bloqueia listagem de itens de outros restaurantes
       allow list: if isStaff() && resourceIsMyRestaurant();
-      
       allow create: if restaurantIsActive(request.resource.data.restaurant_id);
       allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) && 
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['restaurant_id', 'order_id']);
       allow delete: if (isAdmin() || isWaiter() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
-    // ══════════════════════════════════════════
-    // SAAS MANAGEMENT
-    // ══════════════════════════════════════════
-
+    // --------------------------------------------------------------------------
+    // SYSTEM
+    // --------------------------------------------------------------------------
     match /system_logs/{logId} {
       allow read, write: if isSuperAdmin();
     }
-
     match /support_tickets/{ticketId} {
       allow read, write: if isSuperAdmin();
-      // Futuro: permitir que restaurantes vejam seus próprios tickets
     }
-
     match /support_messages/{messageId} {
       allow read, write: if isSuperAdmin();
     }

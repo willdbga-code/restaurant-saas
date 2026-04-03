@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { onSnapshot, collection, query, where, orderBy, limit, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import { Bell, CreditCard, Users, CheckCircle2, Lock, X } from "lucide-react";
+import { Bell, CreditCard, Users, CheckCircle2, Lock, X, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/firebase/orders";
 
@@ -50,6 +50,7 @@ export function NotificationFeed({ restaurantId }: { restaurantId: string | unde
     payment_partial: { icon: CreditCard, color: "text-orange-400 bg-orange-500/10", label: "Pagamento parcial" },
     payment_completed: { icon: CheckCircle2, color: "text-green-400 bg-green-500/10", label: "Mesa liquidada" },
     table_opening_request: { icon: Lock, color: "text-red-400 bg-red-500/10", label: "Abertura de Mesa" },
+    order_created: { icon: ShoppingBag, color: "text-purple-400 bg-purple-500/10", label: "Novo Pedido" },
   };
 
   return (
@@ -112,9 +113,10 @@ export function NotificationFeed({ restaurantId }: { restaurantId: string | unde
                           {n.type === "payment_completed" && ` finalizou a conta`}
                           {n.type === "payment_started" && ` abriu divisão de conta`}
                           {n.type === "table_opening_request" && ` solicitou liberação de acesso`}
+                          {n.type === "order_created" && ` enviou um novo pedido`}
                         </p>
                         <p className="text-[10px] text-zinc-600 mt-2 font-medium">
-                          {n.created_at?.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
+                          {n.created_at ? n.created_at.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' }) : "Agora"}
                         </p>
                       </div>
                     </div>

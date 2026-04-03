@@ -143,7 +143,7 @@ function FeedCard({ product, onOpenDrawer }: { product: Product; onOpenDrawer: (
       
       {/* Image Area (Unobstructed) */}
       <div 
-        className={cn("relative w-full overflow-hidden", hasImage ? "aspect-[4/5] sm:aspect-[4/3]" : "aspect-[2/1] bg-white/[0.02] flex items-center justify-center")}
+        className={cn("relative w-full overflow-hidden", hasImage ? "aspect-[4/5] sm:aspect-[4/3]" : "aspect-[3/2] bg-white/[0.02] flex items-center justify-center")}
         onClick={() => onOpenDrawer(product)}
       >
         {hasImage ? (
@@ -154,29 +154,29 @@ function FeedCard({ product, onOpenDrawer }: { product: Product; onOpenDrawer: (
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
           />
         ) : (
-          <UtensilsCrossed className="h-20 w-20 text-white/5" />
+          <UtensilsCrossed className="h-16 w-16 text-white/5" />
         )}
       </div>
 
       {/* Content Area (Stacked Below) */}
-      <div className="p-8 space-y-6 bg-zinc-900">
+      <div className="p-6 sm:p-8 space-y-6 bg-zinc-900">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1 flex-1">
-            <h3 className="text-2xl font-black text-white leading-tight tracking-tight uppercase">{product.name}</h3>
+            <h3 className="text-xl sm:text-2xl font-black text-white leading-tight tracking-tight uppercase">{product.name}</h3>
             {product.description && (
-              <p className="text-sm text-zinc-500 font-medium leading-relaxed line-clamp-2">{product.description}</p>
+              <p className="text-xs sm:text-sm text-zinc-500 font-medium leading-relaxed line-clamp-2">{product.description}</p>
             )}
           </div>
-          <div className="shrink-0 bg-white/5 px-4 py-2 rounded-2xl border border-white/10">
-            <span className="text-white text-xl font-black tracking-tighter">{fmt(product.price)}</span>
+          <div className="shrink-0 bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl border border-white/10">
+            <span className="text-white text-lg sm:text-xl font-black tracking-tighter">{fmt(product.price)}</span>
           </div>
         </div>
 
         <button 
           onClick={() => onOpenDrawer(product)}
-          className="btn-primary-theme w-full py-5 rounded-[1.8rem] text-sm font-black uppercase tracking-widest active:scale-95 transition-all bg-primary-theme text-white flex items-center justify-center gap-2 shadow-lg shadow-primary-theme/20"
+          className="btn-primary-theme w-full py-4 sm:py-5 rounded-[1.5rem] sm:rounded-[1.8rem] text-xs sm:text-sm font-black uppercase tracking-widest active:scale-95 transition-all bg-primary-theme text-white flex items-center justify-center gap-2 shadow-lg shadow-primary-theme/20"
         >
-          <Plus className="h-5 w-5" /> Adicionar ao Pedido
+          <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> Adicionar
         </button>
       </div>
     </div>

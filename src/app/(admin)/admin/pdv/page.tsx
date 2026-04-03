@@ -141,20 +141,20 @@ export default function PDVPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 sm:p-8">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">PDV — Seleção de Mesa</h1>
           <p className="mt-1 text-sm text-zinc-400">Toque em uma mesa para abrir ou continuar um pedido.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button 
             onClick={() => setScanOpen(true)}
-            className="bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-700"
+            className="flex-1 bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-700 sm:flex-none"
           >
             <QrCode className="mr-2 h-4 w-4 text-orange-400" /> Escanear Mesa
           </Button>
-          <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+          <Button variant="outline" className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800 sm:flex-none">
             <Plus className="mr-2 h-4 w-4" /> Comanda Avulsa
           </Button>
         </div>

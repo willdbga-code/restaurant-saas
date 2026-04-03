@@ -151,7 +151,8 @@ export default function TablesPage() {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900">
+      {/* Responsive View: Table for Desktop, Cards for Mobile */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-orange-400" />
@@ -161,27 +162,93 @@ export default function TablesPage() {
             Nenhuma mesa cadastrada. Clique em &quot;Nova Mesa&quot; para começar.
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-zinc-800">
-                <TableHead className="text-zinc-400">Mesa</TableHead>
-                <TableHead className="text-zinc-400">Capacidade</TableHead>
-                <TableHead className="text-zinc-400">Status</TableHead>
-                <TableHead className="text-zinc-400">QR Code URL</TableHead>
-                <TableHead className="text-right text-zinc-400">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-zinc-800">
+                    <TableHead className="text-zinc-400">Mesa</TableHead>
+                    <TableHead className="text-zinc-400">Capacidade</TableHead>
+                    <TableHead className="text-zinc-400">Status</TableHead>
+                    <TableHead className="text-zinc-400">QR Code URL</TableHead>
+                    <TableHead className="text-right text-zinc-400">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tables.map((t) => (
+                    <TableRow key={t.id} className="border-zinc-800 hover:bg-zinc-800/50">
+                      <TableCell className="font-medium text-white">{t.label}</TableCell>
+                      <TableCell className="text-zinc-400">{t.capacity} pessoas</TableCell>
+                      <TableCell>
+                        <Select
+                          value={t.status}
+                          onValueChange={(v) => handleStatusChange(t, v as RestTable["status"])}
+                        >
+                          <SelectTrigger className={`h-7 w-32 border-0 px-2 text-xs font-medium ${STATUS_COLORS[t.status]} rounded-md`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="border-zinc-700 bg-zinc-900 text-white">
+                            {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                              <SelectItem key={val} value={val} className="text-xs">{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                          <QrCode className="h-3.5 w-3.5" />
+                          <span className="truncate max-w-[180px]">{t.qr_target_url}</span>
+                        </div>
+                      </TableCell>
+                       <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            title="Testar Mesa (Abrir Menu)"
+                            onClick={() => window.open(t.qr_target_url, "_blank")}
+                            className="h-8 w-8 text-orange-400 hover:text-orange-500 hover:bg-orange-500/10"
+                          >
+                            <ArrowRight className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            title="Ver QR Code"
+                            onClick={() => setViewQr(t)}
+                            className="h-8 w-8 text-blue-400 hover:text-blue-500 hover:bg-blue-500/10"
+                          >
+                            <QrCode className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => openEdit(t)} className="h-8 w-8 text-zinc-400 hover:text-white">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => handleDelete(t)} className="h-8 w-8 text-zinc-400 hover:text-red-400">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="grid grid-cols-1 divide-y divide-zinc-800 md:hidden">
               {tables.map((t) => (
-                <TableRow key={t.id} className="border-zinc-800 hover:bg-zinc-800/50">
-                  <TableCell className="font-medium text-white">{t.label}</TableCell>
-                  <TableCell className="text-zinc-400">{t.capacity} pessoas</TableCell>
-                  <TableCell>
+                <div key={t.id} className="p-4 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-bold text-white text-lg">{t.label}</h4>
+                      <p className="text-xs text-zinc-500">Capacidade: {t.capacity} pessoas</p>
+                    </div>
                     <Select
                       value={t.status}
                       onValueChange={(v) => handleStatusChange(t, v as RestTable["status"])}
                     >
-                      <SelectTrigger className={`h-7 w-32 border-0 px-2 text-xs font-medium ${STATUS_COLORS[t.status]} rounded-md`}>
+                      <SelectTrigger className={`h-8 w-28 border-0 px-3 text-[10px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]} rounded-xl`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="border-zinc-700 bg-zinc-900 text-white">
@@ -190,45 +257,30 @@ export default function TablesPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                      <QrCode className="h-3.5 w-3.5" />
-                      <span className="truncate max-w-[180px]">{t.qr_target_url}</span>
-                    </div>
-                  </TableCell>
-                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        title="Testar Mesa (Abrir Menu)"
-                        onClick={() => window.open(t.qr_target_url, "_blank")}
-                        className="h-8 w-8 text-orange-400 hover:text-orange-500 hover:bg-orange-500/10"
-                      >
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        title="Ver QR Code"
-                        onClick={() => setViewQr(t)}
-                        className="h-8 w-8 text-blue-400 hover:text-blue-500 hover:bg-blue-500/10"
-                      >
+                  </div>
+                  
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="secondary" onClick={() => setViewQr(t)} className="h-9 px-3 rounded-xl bg-blue-500/10 text-blue-400 border-blue-500/10">
                         <QrCode className="h-4 w-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(t)} className="h-8 w-8 text-zinc-400 hover:text-white">
-                        <Pencil className="h-4 w-4" />
+                      <Button size="sm" variant="secondary" onClick={() => window.open(t.qr_target_url, "_blank")} className="h-9 px-3 rounded-xl bg-orange-500/10 text-orange-400 border-orange-500/10">
+                        <ArrowRight className="h-4 w-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDelete(t)} className="h-8 w-8 text-zinc-400 hover:text-red-400">
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => openEdit(t)} className="h-9 px-4 rounded-xl bg-zinc-800 text-white border-zinc-700">
+                        <Pencil className="mr-2 h-3.5 w-3.5" /> Editar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(t)} className="h-9 w-9 p-0 text-zinc-500 hover:text-red-400">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </>
         )}
       </div>
 

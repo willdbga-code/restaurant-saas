@@ -203,3 +203,88 @@ export const onRestaurantDeletedPulse = onDocumentDeleted("restaurants/{restaura
   
   logger.info("Pulse: Contador de restaurantes decrementado");
 });
+
+/**
+ * 4. Trigger de Notificação para Novos Pedidos
+ */
+export const onOrderCreatedNotification = onDocumentCreated("orders/{orderId}", async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const order = snap.data();
+  
+  await db.collection("notifications").add({
+    restaurant_id: order.restaurant_id,
+    order_id: snap.id,
+    table_label: order.table_label || "Balcão",
+    type: "order_created",
+    is_read: false,
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+});
+
+/**
+ * WEB PUSH NOTIFICATIONS (FCM)
+ * Dispara notificações Push para todos os membros da equipe do restaurante.
+ */
+export const onNotificationCreated = onDocumentCreated("notifications/{notifId}", async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+
+  const notif = snap.data();
+  const restaurantId = notif.restaurant_id;
+  if (!restaurantId) return;
+
+  // 1. Busca todos os usuários vinculados a este restaurante que possuem tokens FCM
+  const staffSnap = await db.collection("users")
+    .where("restaurant_id", "==", restaurantId)
+    .get();
+
+  const tokens: string[] = [];
+  staffSnap.forEach(doc => {
+    const userData = doc.data();
+    if (userData.fcm_tokens && Array.isArray(userData.fcm_tokens)) {
+      tokens.push(...userData.fcm_tokens);
+    }
+  });
+
+  if (tokens.length === 0) {
+    logger.info(`Nenhum token FCM encontrado para o restaurante ${restaurantId}`);
+    return;
+  }
+
+  // 2. Prepara a carga da notificação
+  const titles: Record<string, string> = {
+    table_opening_request: "🔓 Solicitação de Abertura",
+    order_created: "🍕 Novo Pedido!",
+    payment_partial: "💰 Pagamento Parcial",
+    payment_completed: "✅ Mesa Finalizada",
+  };
+
+  const bodies: Record<string, string> = {
+    table_opening_request: "Cliente aguardando liberação",
+    order_created: "Um novo pedido acaba de chegar",
+    payment_partial: "Um pagamento parcial foi registrado",
+    payment_completed: "A conta foi totalmente paga",
+  };
+
+  const payload = {
+    notification: {
+      title: titles[notif.type] || "🔔 Nova Atividade",
+      body: `${notif.table_label}: ${bodies[notif.type] || "Verifique o painel"}`,
+    },
+    data: {
+      restaurant_id: restaurantId,
+      type: notif.type,
+      click_action: "/admin/kds", 
+    },
+    tokens: [...new Set(tokens)], 
+  };
+
+  // 3. Envia via Multicast (até 500 tokens por vez)
+  try {
+    const response = await admin.messaging().sendEachForMulticast(payload);
+    logger.info(`Notificações enviadas: ${response.successCount} sucesso, ${response.failureCount} falha.`);
+  } catch (err) {
+    logger.error("Erro ao enviar multicast FCM:", err);
+  }
+});

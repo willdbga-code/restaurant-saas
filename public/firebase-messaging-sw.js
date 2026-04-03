@@ -3,12 +3,12 @@ importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compa
 
 // O Service Worker precisa de sua própria inicialização (Compat)
 firebase.initializeApp({
-  apiKey: "env-placeholder", // Firebase preenche automaticamente em tempo de execução se houver link de aplicação, mas o SW não tem acesso ao process.env
-  authDomain: "env-placeholder",
-  projectId: "env-placeholder",
-  storageBucket: "env-placeholder",
-  messagingSenderId: "env-placeholder",
-  appId: "env-placeholder"
+  apiKey: "AIzaSyBL-MheF_0In0Xcn3-IX69MZ-Rl5eBSiOI",
+  authDomain: "restaurant-saas-a9dca.firebaseapp.com",
+  projectId: "restaurant-saas-a9dca",
+  storageBucket: "restaurant-saas-a9dca.firebasestorage.app",
+  messagingSenderId: "87503141663",
+  appId: "1:87503141663:web:4773b104e0fb0bee200e2a"
 });
 
 const messaging = firebase.messaging();

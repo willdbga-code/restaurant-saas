@@ -210,8 +210,8 @@ export default function CategoriesPage() {
         </Button>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900">
+      {/* Responsive View: Table for Desktop, Cards for Mobile */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-orange-400" />
@@ -221,52 +221,94 @@ export default function CategoriesPage() {
             Nenhuma categoria ainda. Clique em &quot;Nova Categoria&quot; para começar.
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-zinc-800">
-                <TableHead className="text-zinc-400">Foto</TableHead>
-                <TableHead className="text-zinc-400">Nome</TableHead>
-                <TableHead className="text-zinc-400">Descrição</TableHead>
-                <TableHead className="text-zinc-400">Ordem</TableHead>
-                <TableHead className="text-zinc-400">Status</TableHead>
-                <TableHead className="text-right text-zinc-400">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-zinc-800">
+                    <TableHead className="text-zinc-400">Foto</TableHead>
+                    <TableHead className="text-zinc-400">Nome</TableHead>
+                    <TableHead className="text-zinc-400">Descrição</TableHead>
+                    <TableHead className="text-zinc-400">Ordem</TableHead>
+                    <TableHead className="text-zinc-400">Status</TableHead>
+                    <TableHead className="text-right text-zinc-400">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categories.map((cat) => (
+                    <TableRow key={cat.id} className="border-zinc-800 hover:bg-zinc-800/50">
+                      <TableCell>
+                        {cat.image_url ? (
+                          <img src={cat.image_url} alt="" className="h-10 w-10 rounded-lg object-cover border border-zinc-700" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] text-zinc-600 text-center uppercase font-bold px-1">
+                            No Img
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium text-white">{cat.name}</TableCell>
+                      <TableCell className="text-zinc-400">{cat.description ?? "—"}</TableCell>
+                      <TableCell className="text-zinc-400">{cat.sort_order}</TableCell>
+                      <TableCell>
+                        <Badge variant={cat.is_active ? "default" : "secondary"} className={cat.is_active ? "bg-green-500/10 text-green-400 hover:bg-green-500/10 border-green-500/20" : ""}>
+                          {cat.is_active ? "Ativa" : "Inativa"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="icon" variant="ghost" onClick={() => openEdit(cat)} className="h-8 w-8 text-zinc-400 hover:text-white">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => handleDelete(cat)} className="h-8 w-8 text-zinc-400 hover:text-red-400">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="grid grid-cols-1 divide-y divide-zinc-800 md:hidden">
               {categories.map((cat) => (
-                <TableRow key={cat.id} className="border-zinc-800 hover:bg-zinc-800/50">
-                  <TableCell>
-                    {cat.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={cat.image_url} alt="" className="h-10 w-10 rounded-lg object-cover border border-zinc-700" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] text-zinc-600 text-center uppercase font-bold px-1">
-                        No Img
+                <div key={cat.id} className="p-4 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex gap-3">
+                      {cat.image_url ? (
+                        <img src={cat.image_url} alt="" className="h-12 w-12 rounded-xl object-cover border border-zinc-800" />
+                      ) : (
+                        <div className="h-12 w-12 rounded-xl bg-zinc-800 border border-zinc-800 flex items-center justify-center text-[10px] text-zinc-600 text-center uppercase font-bold px-1">
+                          No Img
+                        </div>
+                      )}
+                      <div>
+                        <h4 className="font-bold text-white leading-tight">{cat.name}</h4>
+                        <p className="text-xs text-zinc-500 mt-1 line-clamp-1">{cat.description || "Sem descrição"}</p>
                       </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium text-white">{cat.name}</TableCell>
-                  <TableCell className="text-zinc-400">{cat.description ?? "—"}</TableCell>
-                  <TableCell className="text-zinc-400">{cat.sort_order}</TableCell>
-                  <TableCell>
-                    <Badge variant={cat.is_active ? "default" : "secondary"} className={cat.is_active ? "bg-green-500/10 text-green-400 hover:bg-green-500/10 border-green-500/20" : ""}>
-                      {cat.is_active ? "Ativa" : "Inativa"}
+                    </div>
+                    <Badge variant={cat.is_active ? "default" : "secondary"} className={cat.is_active ? "bg-green-500/10 text-green-400 border-green-500/20" : ""}>
+                       {cat.is_active ? "Ativa" : "Inativa"}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(cat)} className="h-8 w-8 text-zinc-400 hover:text-white">
-                        <Pencil className="h-4 w-4" />
+                  </div>
+                  
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ordem: {cat.sort_order}</span>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => openEdit(cat)} className="h-9 px-4 rounded-xl bg-zinc-800 text-white border-zinc-700">
+                        <Pencil className="mr-2 h-3.5 w-3.5" /> Editar
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDelete(cat)} className="h-8 w-8 text-zinc-400 hover:text-red-400">
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(cat)} className="h-9 w-9 p-0 text-zinc-500 hover:text-red-400">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </>
         )}
       </div>
 
