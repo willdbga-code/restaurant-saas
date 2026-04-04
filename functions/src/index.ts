@@ -192,7 +192,8 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
         email: auth.token.email || inviteEmail || "",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      }, { merge: true });
+
 
       // 3. Marca convite como aceito
       await inviteRef.update({

@@ -57,9 +57,23 @@ export default function LoginPage() {
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
-        toast.success("Login realizado com sucesso!");
+        
+        if (inviteId) {
+          // --- Se o usuário já tem conta e está fazendo login para aceitar um novo convite ---
+          const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
+          await claimFn({
+            action: "claim_invitation",
+            inviteId: inviteId,
+            name: name,
+          });
+          toast.success("Convite aceito! Seu perfil foi atualizado.");
+        } else {
+          toast.success("Login realizado com sucesso!");
+        }
+        
         router.push("/admin");
       } else {
+
         // Fluxo de Cadastro
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(userCred.user, { displayName: name });
@@ -108,8 +122,14 @@ export default function LoginPage() {
       if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
         toast.error("Email ou senha incorretos. Se este é seu primeiro acesso, clique em 'Cadastre-se grátis' logo acima.");
       } else if (err.code === "auth/email-already-in-use") {
-        toast.error("Este email já está cadastrado. Tente fazer login.");
+        if (inviteId) {
+          toast.info("Você já possui uma conta! Faça login para aceitar o convite automaticamente.");
+          setIsLogin(true);
+        } else {
+          toast.error("Este email já está cadastrado. Tente fazer login.");
+        }
       } else if (err.code === "auth/operation-not-allowed") {
+
         toast.error("O provedor de E-mail/Senha não está ativado no Firebase Console.");
       } else {
         toast.error("Ocorreu um erro ao autenticar. Verifique sua conexão ou as configurações do Firebase.");
