@@ -629,7 +629,7 @@ function MenuContent({ slug }: { slug: string }) {
     );
   }
 
-  if (status === "locked") {
+  if (status === "locked" && !activeOrder) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-8 text-center bg-zinc-950 text-white font-outfit">
         <ThemeInjector color={restaurant?.branding?.primary_color} />
