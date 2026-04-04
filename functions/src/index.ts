@@ -56,6 +56,9 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
     let myRestaurantId = auth.token.restaurant_id;
     let myRole = auth.token.role;
 
+    // 1. Log para Depuração (Essencial para entender falhas de permissão)
+    logger.info(`Invite Staff: Requester UID=${auth.uid}, Role=${myRole}, RestID=${myRestaurantId}`);
+
     // Se o usuário foi criado direto no frontend, ele não terá custom claims no token ainda.
     // Lemos do Firestore para validar e aproveitar para "curar" (self-heal) o token.
     if (!myRole || !myRestaurantId) {
@@ -65,8 +68,9 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
         myRole = udata?.role;
         myRestaurantId = udata?.restaurant_id;
         
-        // Aplica os claims que faltavam no dono
+        // Aplica os claims que faltavam no dono se ele for admin e tiver rest_id no doc
         if (myRole === "admin" && myRestaurantId) {
+          logger.info(`Self-healing Admin Claims for ${auth.uid}`);
           await admin.auth().setCustomUserClaims(auth.uid, {
             restaurant_id: myRestaurantId,
             role: "admin",
@@ -75,21 +79,26 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
       }
     }
 
+    // Se ainda não temos o restID no token/doc, mas veio no data (segurança menor, mas útil para o primeiro setup)
     if (!myRestaurantId && data.restaurant_id) {
       myRestaurantId = data.restaurant_id;
     }
 
     if (myRole !== "admin") {
-      throw new HttpsError("permission-denied", "Apenas admins do restaurante autorizados.");
+      throw new HttpsError("permission-denied", "Apenas administradores podem convidar membros.");
     }
     
     if (!myRestaurantId) {
-      throw new HttpsError("failed-precondition", "Restaurante não encontrado no perfil do usuário.");
+      throw new HttpsError("failed-precondition", "Não foi possível identificar o seu restaurante.");
     }
 
     const { role, name, email, password } = data; // role: waiter, kitchen, admin
 
-    // 1. Criar usuário no Auth via Admin SDK (evita deslogar o admin atual que está fazendo o convite)
+    if (!email || !password || !name || !role) {
+      throw new HttpsError("invalid-argument", "Todos os campos (nome, email, senha, cargo) são obrigatórios.");
+    }
+
+    // 2. Criar usuário no Auth via Admin SDK
     let targetUser;
     try {
       targetUser = await admin.auth().createUser({
@@ -97,24 +106,39 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
         password: password,
         displayName: name,
       });
+      logger.info(`User Created: UID=${targetUser.uid}, Email=${email}`);
     } catch (e: any) {
-      throw new HttpsError("already-exists", e.message || "Erro ao criar usuário.");
+      logger.error("Error creating user in Auth:", e);
+      // Tratamento de erro amigável para e-mail já existente
+      if (e.code === "auth/email-already-exists") {
+        throw new HttpsError("already-exists", "Este e-mail já está sendo usado por outro usuário.");
+      }
+      throw new HttpsError("internal", e.message || "Erro interno ao criar conta no Firebase Auth.");
     }
     const targetUid = targetUser.uid;
 
-    await admin.auth().setCustomUserClaims(targetUid, {
-      restaurant_id: myRestaurantId,
-      role: role, 
-    });
+    try {
+      // 3. Seta Custom Claims
+      await admin.auth().setCustomUserClaims(targetUid, {
+        restaurant_id: myRestaurantId,
+        role: role, 
+      });
 
-    await db.collection("users").doc(targetUid).set({
-      uid: targetUid,
-      restaurant_id: myRestaurantId,
-      role: role,
-      name: name,
-      email: email,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      // 4. Cria documento no Firestore
+      await db.collection("users").doc(targetUid).set({
+        uid: targetUid,
+        restaurant_id: myRestaurantId,
+        role: role,
+        name: name,
+        email: email,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      
+      logger.info(`Staff Profile Created in Firestore: UID=${targetUid}`);
+    } catch (fsErr: any) {
+      logger.error("Error setting claims or doc for staff:", fsErr);
+      throw new HttpsError("internal", "Usuário criado, mas houve erro ao definir permissões.");
+    }
 
     return { success: true, role, restaurant_id: myRestaurantId, targetUid };
   }

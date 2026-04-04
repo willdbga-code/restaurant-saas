@@ -16,19 +16,15 @@ service cloud.firestore {
     }
 
     function myRestaurantId() {
-      let tokenRestId = request.auth.token.get('restaurant_id', null);
-      if (tokenRestId != null) return tokenRestId;
-      
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc.data.get('restaurant_id', null);
+      return isAuthed() && request.auth.token.get('restaurant_id', null) != null 
+        ? request.auth.token.restaurant_id 
+        : (isAuthed() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('restaurant_id', null) : null);
     }
 
     function myRole() {
-      let tokenRole = request.auth.token.get('role', 'customer');
-      if (tokenRole != 'customer') return tokenRole;
-
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc.data.get('role', 'customer');
+      return isAuthed() && request.auth.token.get('role', 'customer') != 'customer'
+        ? request.auth.token.role
+        : (isAuthed() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'customer') : 'customer');
     }
 
     function isSuperAdmin() {
@@ -56,7 +52,7 @@ service cloud.firestore {
     }
 
     function isCustomer() {
-      return isAuthed() && (request.auth.token.role == null || request.auth.token.role == 'customer');
+      return isAuthed() && (request.auth.token.get('role', null) == null || request.auth.token.role == 'customer');
     }
 
     function isRestaurantOwner(restaurantId) {
@@ -84,8 +80,7 @@ service cloud.firestore {
     }
 
     function getPlanTablesLimit(restaurantId) {
-      let plan = get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.plan_type;
-      return plan == 'free' ? 5 : (plan == 'pro' ? 30 : 100);
+      return get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.plan_type == 'free' ? 5 : (get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.plan_type == 'pro' ? 30 : 100);
     }
 
     function tableBelongsToRestaurant(tableId, restaurantId) {
@@ -208,6 +203,14 @@ service cloud.firestore {
       allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) && 
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['restaurant_id', 'order_id']);
       allow delete: if (isAdmin() || isWaiter() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+    match /order_payments/{paymentId} {
+      allow get: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin());
+      allow list: if isStaff() && (request.query.limit <= 100 && resourceIsMyRestaurant());
+      allow create: if restaurantIsActive(request.resource.data.restaurant_id) && 
+                      isStaff() && (incomingIsMyRestaurant() || isSuperAdmin());
+      allow update, delete: if isSuperAdmin();
     }
 
     // --------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Tag, ShoppingBag, TableProperties, ChefHat, LogOut, MonitorCheck, UtensilsCrossed, Settings, Users, Palette, ShieldCheck } from "lucide-react";
+import { LayoutGrid, Tag, ShoppingBag, TableProperties, ChefHat, LogOut, MonitorCheck, UtensilsCrossed, Settings, Users, Palette, ShieldCheck, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
@@ -17,6 +17,7 @@ const nav = [
   { href: "/admin/staff", label: "Equipe", icon: Users },
   { href: "/admin/settings", label: "Configurações", icon: Settings },
   { href: "/admin/billing", label: "Assinatura", icon: ShoppingBag },
+  { href: "/admin/sales-report", label: "Relatório de Vendas", icon: BarChart3 },
 ];
 
 import { NotificationFeed } from "./NotificationFeed";

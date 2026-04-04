@@ -359,6 +359,25 @@ export const notifyPaymentActivity = async (p: {
   });
 };
 
+export const updateOrderServiceFee = async (orderId: string, applyFee: boolean) => {
+  const orderRef = doc(db, "orders", orderId);
+  return await runTransaction(db, async (transaction) => {
+    const orderSnap = await transaction.get(orderRef);
+    if (!orderSnap.exists()) return;
+    const order = orderSnap.data() as Order;
+    
+    // Calcula 10% do subtotal
+    const serviceFee = applyFee ? Math.round(order.subtotal * 0.1) : 0;
+    const newTotal = order.subtotal + serviceFee;
+    
+    transaction.update(orderRef, {
+      service_fee: serviceFee,
+      total: newTotal,
+      updated_at: serverTimestamp()
+    });
+  });
+};
+
 export const processOrderPayment = async (orderId: string, amount: number, method: PaymentMethod) => {
   const orderRef = doc(db, "orders", orderId);
 
@@ -369,11 +388,12 @@ export const processOrderPayment = async (orderId: string, amount: number, metho
     const order = orderSnap.data() as Order;
     const currentPaid = order.amount_paid || 0;
     const newTotalPaid = currentPaid + amount;
-    const isFullyPaid = newTotalPaid >= (order.total - 0.01); // Margem para float
+    
+    // Verificamos se atingiu o total (com margem para floats)
+    const totalToPay = order.total;
+    const isFullyPaid = newTotalPaid >= (totalToPay - 1); // Margem de 1 centavo
 
-    // 1. Log the individual payment (addDoc can't be in transaction, but we can do it after or before if not critical to atomicity of balance)
-    // Actually, in Firestore transactions, we should do all reads then all writes. 
-    // Creating a child doc is a write.
+    // 1. Log the individual payment
     const paymentRef = doc(collection(db, "order_payments"));
     transaction.set(paymentRef, {
       order_id: orderId,
@@ -393,7 +413,6 @@ export const processOrderPayment = async (orderId: string, amount: number, metho
       updated_at: serverTimestamp(),
     });
 
-    // Notificação e logs externos fora da transação (executam se a transação der commit)
     return { 
       restaurantId: order.restaurant_id, 
       tableLabel: order.table_label || "Mesa",
@@ -411,4 +430,5 @@ export const processOrderPayment = async (orderId: string, amount: number, metho
     }
   });
 };
+
 

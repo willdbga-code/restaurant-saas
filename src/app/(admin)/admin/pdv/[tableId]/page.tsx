@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useEffect } from "react";
+
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTables } from "@/hooks/useTables";
@@ -9,12 +10,19 @@ import { useProducts } from "@/hooks/useProducts";
 import { useActiveOrder } from "@/hooks/useActiveOrder";
 import { useOrderItems } from "@/hooks/useOrderItems";
 import { useOrderPayments } from "@/hooks/useOrderPayments";
+import { 
+  getDocs, collection, query, where, writeBatch 
+} from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
 import {
   createOrder, addOrderItem, removeOrderItem,
   confirmOrder, closeOrder, updateOrderItemNotes,
   requestItemCancellation, forceCancelItem,
+  processOrderPayment, updateOrderServiceFee,
   PaymentMethod, Order, OrderItem,
 } from "@/lib/firebase/orders";
+import "@/styles/print.css";
+
 import { updateTable } from "@/lib/firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +33,12 @@ import { cn } from "@/lib/utils";
 import {
   ArrowLeft, Plus, Minus, Trash2, MessageSquare,
   Check, Loader2, ChefHat, Receipt, Clock,
-  XCircle, AlertCircle, ShieldAlert
+  XCircle, AlertCircle, ShieldAlert, Printer,
+  DollarSign, Percent
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+
 
 function fmt(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -69,7 +80,9 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
   const [noteDialog, setNoteDialog] = useState<{ item: OrderItem; note: string } | null>(null);
   const [payDialog, setPayDialog] = useState(false);
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  const [payAmount, setPayAmount] = useState("");
   const [busy, setBusy] = useState(false);
+
 
   const visibleProducts = products.filter(
     (p) => p.is_available && (!selectedCat || p.category_id === selectedCat)
@@ -83,16 +96,44 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
     if (!user || !table) return;
     setBusy(true);
     try {
-      await createOrder({
+      const orderRef = await createOrder({
         restaurantId: user.restaurant_id,
         tableId: table.id,
         tableLabel: table.label,
         waiterUid: user.uid,
         waiterName: user.name,
       });
-      await updateTable(table.id, { status: "occupied" });
+
+      // 1. Vincula o pedido à mesa
+      await updateTable(table.id, { 
+        status: "occupied", 
+        current_order_id: orderRef.id 
+      });
+
+      // 2. Limpa alertas de abertura pendentes para esta mesa
+      // - [x] **Table Session & Reset**
+      // - [x] Verify `closeOrder` logic in `src/lib/firebase/orders.ts`.
+      // - [x] Ensure `PDVTablePage` correctly resets table state and clears alerts.
+      // - [ ] Test customer-side isolation (New blank order on scan).
+      const alertsSnap = await getDocs(query(
+        collection(db, "table_alerts"),
+        where("table_id", "==", table.id),
+        where("status", "==", "pending")
+      ));
+      
+      if (!alertsSnap.empty) {
+        const batch = writeBatch(db);
+        alertsSnap.docs.forEach(d => {
+          batch.update(d.ref, { status: "accepted", updated_at: new Date() });
+        });
+        await batch.commit();
+      }
+
       toast.success(`Pedido iniciado para ${table.label}!`);
-    } catch { toast.error("Erro ao criar pedido."); }
+    } catch (err) { 
+      console.error(err);
+      toast.error("Erro ao criar pedido."); 
+    }
     finally { setBusy(false); }
   }
 
@@ -133,17 +174,66 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
   }
 
   async function handleClose() {
-    if (!order || !table) return;
+    // This function is now deprecated in favor of handlePayment
+    // but kept for compatibility if needed. Moving logic to handlePayment.
+  }
+
+  async function handlePayment() {
+    if (!order || !payAmount) return;
+    const amountFloat = parseFloat(payAmount.replace(",", "."));
+    if (isNaN(amountFloat) || amountFloat <= 0) {
+      toast.error("Valor inválido.");
+      return;
+    }
+
+    const amountCents = Math.round(amountFloat * 100);
     setBusy(true);
     try {
-      await closeOrder(order.id, payMethod);
-      await updateTable(table.id, { status: "available", current_order_id: null });
-      toast.success("Conta fechada!");
-      setPayDialog(false);
-      router.push("/admin/pdv");
-    } catch { toast.error("Erro ao fechar conta."); }
-    finally { setBusy(false); }
+      await processOrderPayment(order.id, amountCents, payMethod);
+      toast.success("Pagamento registrado!");
+      setPayAmount("");
+      
+      // Se o saldo for zerado, o listener do Firebase já vai atualizar o status
+      // Mas podemos checar aqui se já fechou para fechar o modal
+      const remaining = order.total - (order.amount_paid + amountCents);
+      if (remaining <= 0) {
+         await updateTable(tableId, { status: "available", current_order_id: null });
+         setPayDialog(false);
+         router.push("/admin/pdv");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao processar pagamento.");
+    } finally {
+      setBusy(false);
+    }
   }
+
+  async function handleToggleServiceFee(checked: boolean) {
+    if (!order) return;
+    setBusy(true);
+    try {
+      await updateOrderServiceFee(order.id, checked);
+      toast.success(checked ? "Taxa de 10% aplicada." : "Taxa de serviço removida.");
+    } catch {
+      toast.error("Erro ao atualizar taxa.");
+    } finally {
+       setBusy(false);
+    }
+  }
+
+  function handlePrintReceipt() {
+     window.print();
+  }
+
+  // Auto-aplica a taxa de 10% ao abrir o checkout se estiver zerada
+  useEffect(() => {
+    if (payDialog && order && (order.service_fee === 0) && (order.amount_paid === 0)) {
+       handleToggleServiceFee(true);
+    }
+  }, [payDialog]);
+
+
 
   async function handleSaveNote() {
     if (!noteDialog) return;
@@ -172,7 +262,8 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen flex-col bg-zinc-950">
+    <div className="flex h-screen flex-col bg-zinc-950 no-print">
+
       {/* ── Top Bar ── */}
       <header className="flex items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4 py-3">
         <button onClick={() => router.push("/admin/pdv")} className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors">
@@ -408,7 +499,8 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
 
       {/* ── Nota Dialog ── */}
       <Dialog open={!!noteDialog} onOpenChange={() => setNoteDialog(null)}>
-        <DialogContent className="border-zinc-800 bg-zinc-950 text-white">
+        <DialogContent className="border-zinc-800 bg-zinc-950 text-white no-print">
+
           <DialogHeader>
             <DialogTitle>Observação — {noteDialog?.item.product_name}</DialogTitle>
           </DialogHeader>
@@ -427,40 +519,188 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
         </DialogContent>
       </Dialog>
 
-      {/* ── Fechar Conta Dialog ── */}
+      {/* ── Fechar Conta Dialog (Checkout Detalhado) ── */}
       <Dialog open={payDialog} onOpenChange={setPayDialog}>
-        <DialogContent className="border-zinc-800 bg-zinc-950 text-white">
+        <DialogContent className="border-zinc-800 bg-zinc-950 text-white sm:max-w-2xl max-h-[90vh] overflow-y-auto no-print">
+
           <DialogHeader>
-            <DialogTitle>Fechar Conta — {table?.label}</DialogTitle>
+             <div className="flex items-center justify-between">
+                <DialogTitle className="text-2xl font-black">Checkout — {table?.label}</DialogTitle>
+                <Button variant="outline" size="sm" onClick={handlePrintReceipt} className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                   <Printer className="mr-2 h-4 w-4" /> Pré-conta (80mm)
+                </Button>
+             </div>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-center">
-              <p className="text-sm text-zinc-400">{items.length} item(s)</p>
-              <p className="text-3xl font-black text-orange-400">{fmt(order?.total ?? 0)}</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
+            {/* Esquerda: Resumo da Conta */}
+            <div className="space-y-6">
+               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
+                  <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-4">Itens Consumidos</p>
+                  <ul className="space-y-3 mb-6">
+                     {items.filter(i => i.status !== "cancelled").map(item => (
+                        <li key={item.id} className="flex justify-between text-sm">
+                           <span className="text-zinc-400">{item.quantity}x {item.product_name}</span>
+                           <span className="text-white font-medium">{fmt(item.total_price)}</span>
+                        </li>
+                     ))}
+                  </ul>
+
+                  <div className="space-y-2 border-t border-zinc-800 pt-4">
+                     <div className="flex justify-between text-sm">
+                        <span className="text-zinc-500">Subtotal</span>
+                        <span className="text-zinc-300">{fmt(order?.subtotal ?? 0)}</span>
+                     </div>
+                     
+                     <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                           <span className="text-sm text-zinc-500">Taxa de Serviço (10%)</span>
+                           <Switch 
+                              checked={(order?.service_fee ?? 0) > 0} 
+                              onCheckedChange={handleToggleServiceFee}
+                              disabled={busy}
+                           />
+                        </div>
+                        <span className={cn("text-sm transition-colors", (order?.service_fee ?? 0) > 0 ? "text-green-500 font-bold" : "text-zinc-600")}>
+                           {fmt(order?.service_fee ?? 0)}
+                        </span>
+                     </div>
+
+                     <div className="flex justify-between text-xl font-black text-white pt-2">
+                        <span>Total</span>
+                        <span className="text-orange-500">{fmt(order?.total ?? 0)}</span>
+                     </div>
+                  </div>
+               </div>
+
+               {payments.length > 0 && (
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6">
+                     <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-4">Pagamentos Já Realizados</p>
+                     <ul className="space-y-2 text-xs">
+                        {payments.map(p => (
+                           <li key={p.id} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+                              <span className="text-zinc-400">{p.method.toUpperCase()}</span>
+                              <span className="text-green-500 font-black">{fmt(p.amount)}</span>
+                           </li>
+                        ))}
+                     </ul>
+                  </div>
+               )}
             </div>
-            <div className="space-y-1.5">
-              <p className="text-sm text-zinc-400">Forma de pagamento</p>
-              <Select value={payMethod} onValueChange={(v) => setPayMethod(v as PaymentMethod)}>
-                <SelectTrigger className="border-zinc-700 bg-zinc-900 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-zinc-700 bg-zinc-900 text-white">
-                  {PAY_METHODS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            {/* Direita: Ação de Pagamento */}
+            <div className="space-y-6">
+               <div className="rounded-2xl bg-orange-500/10 border border-orange-500/20 p-6 text-center">
+                  <p className="text-xs font-black uppercase text-orange-500 tracking-widest mb-1">Saldo Remanescente</p>
+                  <p className="text-4xl font-black text-white">{fmt((order?.total ?? 0) - (order?.amount_paid ?? 0))}</p>
+               </div>
+
+               <div className="space-y-4">
+                  <div className="space-y-2">
+                     <label className="text-xs font-black uppercase text-zinc-500 tracking-widest">Quanto deseja pagar?</label>
+                     <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                        <Input 
+                           value={payAmount}
+                           onChange={(e) => setPayAmount(e.target.value)}
+                           placeholder="0,00"
+                           className="bg-zinc-900 border-zinc-800 h-12 pl-10 text-lg font-bold"
+                        />
+                     </div>
+                     <div className="flex gap-2">
+                        <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           onClick={() => setPayAmount(( ((order?.total ?? 0) - (order?.amount_paid ?? 0)) / 100).toString().replace(".", ","))}
+                           className="text-[10px] uppercase font-black text-zinc-500 hover:text-white"
+                        >
+                           Valor Total
+                        </Button>
+                        <Button 
+                           variant="ghost" 
+                           size="sm" 
+                           onClick={() => setPayAmount(( ((order?.total ?? 0) - (order?.amount_paid ?? 0)) / 200).toString().replace(".", ","))}
+                           className="text-[10px] uppercase font-black text-zinc-500 hover:text-white"
+                        >
+                           Dividir por 2
+                        </Button>
+                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                     <label className="text-xs font-black uppercase text-zinc-500 tracking-widest">Forma de Pagamento</label>
+                     <div className="grid grid-cols-2 gap-2">
+                        {PAY_METHODS.map(m => (
+                           <button
+                              key={m.value}
+                              onClick={() => setPayMethod(m.value)}
+                              className={cn(
+                                 "flex items-center gap-2 px-3 py-3 rounded-xl border-2 transition-all text-xs font-bold",
+                                 payMethod === m.value 
+                                    ? "bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/20" 
+                                    : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                              )}
+                           >
+                              <div className={cn("w-2 h-2 rounded-full", payMethod === m.value ? "bg-white" : "bg-zinc-700")} />
+                              {m.label}
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+
+                  <Button 
+                     onClick={handlePayment} 
+                     disabled={busy || !payAmount} 
+                     className="w-full h-14 bg-green-600 hover:bg-green-700 text-white text-lg font-black rounded-2xl shadow-xl shadow-green-500/10 mt-4"
+                  >
+                     {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <><Check className="mr-2 h-6 w-6" /> Confirmar Pagamento</>}
+                  </Button>
+               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPayDialog(false)} className="text-zinc-400">Cancelar</Button>
-            <Button onClick={handleClose} disabled={busy} className="bg-green-600 text-white hover:bg-green-700">
-              {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
-              Confirmar Pagamento
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Receipt Template (Hidden from UI, visible on Print) ── */}
+      <div className="receipt-container no-print">
+         <div className="receipt-header">
+            <h1 style={{fontSize: "20px", fontWeight: "black", marginBottom: "5px"}}>RECIBO DE CONTA</h1>
+            <p>Mesa: {table?.label}</p>
+            <p>Data: {new Date().toLocaleString()}</p>
+         </div>
+         
+         <div className="receipt-items">
+            {items.filter(i => i.status !== "cancelled").map(item => (
+               <div key={item.id} className="receipt-row">
+                  <span>{item.quantity}x {item.product_name}</span>
+                  <span>{fmt(item.total_price)}</span>
+               </div>
+            ))}
+         </div>
+
+         <div className="receipt-summary">
+            <div className="receipt-row">
+               <span>Subtotal:</span>
+               <span>{fmt(order?.subtotal ?? 0)}</span>
+            </div>
+            { (order?.service_fee ?? 0) > 0 && (
+               <div className="receipt-row">
+                  <span>Taxa Serviço (10%):</span>
+                  <span>{fmt(order?.service_fee ?? 0)}</span>
+               </div>
+            )}
+            <div className="receipt-row receipt-total">
+               <span>TOTAL:</span>
+               <span>{fmt(order?.total ?? 0)}</span>
+            </div>
+         </div>
+
+         <div className="receipt-footer">
+            <p>Obrigado pela preferência!</p>
+            <p>SaaS Restaurant - Gestão Inteligente</p>
+         </div>
+      </div>
+
     </div>
   );
 }

@@ -3,10 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTables } from "@/hooks/useTables";
-import { onSnapshot, collection, query, where, doc, updateDoc } from "firebase/firestore";
+import { onSnapshot, collection, query, where, doc, updateDoc, Timestamp } from "firebase/firestore";
+
 import { db } from "@/lib/firebase/config";
 import { playNotificationSound } from "@/lib/utils/sound";
-import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check, Bell, Lock } from "lucide-react";
+import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check, Bell, Lock, BarChart3, Banknote, ArrowUpRight, ArrowDownLeft, Wallet } from "lucide-react";
+import { Order } from "@/lib/firebase/orders";
+
+
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { updateTable } from "@/lib/firebase/firestore";
@@ -39,6 +43,10 @@ export default function PDVPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [scannedTable, setScannedTable] = useState<Table | null>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [todayTotal, setTodayTotal] = useState(0);
+  const [activeOrders, setActiveOrders] = useState<Record<string, Order>>({});
+
+
 
   // Scanner Logic
   useEffect(() => {
@@ -113,6 +121,55 @@ export default function PDVPage() {
     return () => unsub();
   }, [user?.restaurant_id]);
 
+  // Listener do Total do Dia (Caixa)
+  useEffect(() => {
+    if (!user?.restaurant_id) return;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const q = query(
+      collection(db, "orders"),
+      where("restaurant_id", "==", user.restaurant_id),
+      where("status", "==", "closed"),
+      where("updated_at", ">=", Timestamp.fromDate(start))
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const total = snap.docs.reduce((acc, d) => acc + (d.data().amount_paid || 0), 0);
+      setTodayTotal(total);
+    });
+
+    return () => unsub();
+  }, [user?.restaurant_id]);
+
+  // Listener de Pedidos Ativos (para mostrar totais nas mesas)
+  useEffect(() => {
+    if (!user?.restaurant_id) return;
+
+    const q = query(
+      collection(db, "orders"),
+      where("restaurant_id", "==", user.restaurant_id),
+      where("status", "!=", "closed")
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const ordersMap: Record<string, Order> = {};
+      snap.docs.forEach(d => {
+        const order = { id: d.id, ...d.data() } as Order;
+        if (order.table_id) ordersMap[order.table_id] = order;
+      });
+      setActiveOrders(ordersMap);
+    }, (err) => {
+      console.error("Active orders error:", err);
+    });
+
+    return () => unsub();
+  }, [user?.restaurant_id]);
+
+
+
   async function handleOpenTable(table: Table) {
     try {
       await updateTable(table.id, { status: "occupied" });
@@ -144,21 +201,48 @@ export default function PDVPage() {
     <div className="p-4 sm:p-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">PDV — Seleção de Mesa</h1>
-          <p className="mt-1 text-sm text-zinc-400">Toque em uma mesa para abrir ou continuar um pedido.</p>
+          <h1 className="text-2xl font-bold text-white">PDV — Operação de Caixa</h1>
+          <p className="mt-1 text-sm text-zinc-400">Gerencie mesas, pedidos e fechamentos em tempo real.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Quick Stats Summary */}
+          <div className="hidden lg:flex flex-col items-end mr-4 px-4 border-r border-zinc-800">
+             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Vendas hoje</span>
+             <span className="text-xl font-black text-emerald-400">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(todayTotal / 100)}
+             </span>
+          </div>
+
+
+          <Button 
+            onClick={() => router.push("/admin/sales-report")}
+            variant="outline"
+            className="flex-1 border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white sm:flex-none h-10 px-4"
+          >
+            <BarChart3 className="mr-2 h-4 w-4 text-emerald-500" /> Relatórios
+          </Button>
+
+          <Button 
+            onClick={() => toast.info("Função de Sangria disponível no módulo de relatórios avançados.")}
+            className="flex-1 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-white sm:flex-none h-10 px-4"
+          >
+            <ArrowDownLeft className="mr-2 h-4 w-4 text-red-500" /> Sangria
+          </Button>
+
           <Button 
             onClick={() => setScanOpen(true)}
-            className="flex-1 bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-700 sm:flex-none"
+            className="flex-1 bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-700 sm:flex-none h-10 px-4"
           >
             <QrCode className="mr-2 h-4 w-4 text-orange-400" /> Escanear Mesa
           </Button>
-          <Button variant="outline" className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800 sm:flex-none">
-            <Plus className="mr-2 h-4 w-4" /> Comanda Avulsa
+          
+          <Button variant="outline" className="flex-1 border-zinc-700 text-zinc-300 hover:bg-zinc-800 sm:flex-none h-10 px-4">
+            <Plus className="mr-2 h-4 w-4" /> Comanda
           </Button>
         </div>
       </div>
+
+
 
       {/* Sessão de Urgência: Pendências de Abertura */}
       {alerts.length > 0 && (
@@ -212,14 +296,17 @@ export default function PDVPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {tables.map((table: Table) => {
             const cfg = STATUS_CFG[table.status];
+            const order = activeOrders[table.id];
+
             return (
               <button
                 key={table.id}
                 onClick={() => router.push(`/admin/pdv/${table.id}`)}
                 className={cn(
-                  "group relative flex flex-col items-center justify-center rounded-2xl border-2 bg-zinc-900 p-6 text-center transition-all duration-200",
+                  "group relative flex flex-col items-center justify-center rounded-3xl border-2 bg-zinc-900 p-6 text-center transition-all duration-300 shadow-xl",
                   cfg.border,
-                  alerts.some((a: TableAlert) => a.table_id === table.id) && "ring-4 ring-orange-500 ring-offset-4 ring-offset-zinc-950 animate-pulse border-orange-500"
+                  alerts.some((a: TableAlert) => a.table_id === table.id) && "ring-4 ring-orange-500 ring-offset-4 ring-offset-zinc-950 animate-pulse border-orange-500",
+                  order && "border-orange-500/40 bg-orange-500/[0.02]"
                 )}
               >
                 {alerts.some((a: TableAlert) => a.table_id === table.id) && (
@@ -227,19 +314,34 @@ export default function PDVPage() {
                       <Bell className="h-5 w-5 text-white animate-bounce" />
                    </div>
                 )}
-                <span className={cn("absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", cfg.badge)}>
+                <span className={cn("absolute right-3 top-3 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest", cfg.badge)}>
                   {cfg.label}
                 </span>
-                <span className="text-4xl font-black text-white">{table.number}</span>
-                <span className="mt-1 text-sm font-medium text-zinc-300">{table.label}</span>
-                <div className="mt-3 flex items-center gap-1 text-xs text-zinc-500">
-                  <Users className="h-3 w-3" />
-                  <span>{table.capacity} pessoas</span>
+                
+                <span className="text-4xl font-black text-white group-hover:scale-110 transition-transform">{table.number}</span>
+                <span className="mt-1 text-xs font-bold text-zinc-400 uppercase tracking-tighter">{table.label}</span>
+                
+                {order ? (
+                  <div className="mt-4 flex flex-col items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500">
+                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.1em]">Total</span>
+                    <span className="text-lg font-black text-white tabular-nums">
+                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total / 100)}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex items-center gap-1 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                    <Users className="h-3 w-3" />
+                    <span>{table.capacity}p</span>
+                  </div>
+                )}
+
+                <div className="absolute bottom-3 right-3 h-8 w-8 rounded-xl bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                  <ArrowRight className="h-4 w-4 text-white" />
                 </div>
-                <ArrowRight className="absolute bottom-3 right-3 h-4 w-4 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
             );
           })}
+
         </div>
       )}
 

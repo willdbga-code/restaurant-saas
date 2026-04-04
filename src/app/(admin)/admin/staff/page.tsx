@@ -57,8 +57,10 @@ export default function StaffPage() {
       setDialogOpen(false);
       setFormData({ name: "", email: "", password: "", role: "waiter" });
     } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "Erro ao convidar membro.");
+      console.error("Staff Invite Error:", error);
+      // Extrai a mensagem de erro vinda da Cloud Function (HttpsError)
+      const errorMessage = error?.message || "Erro inesperado ao convidar membro.";
+      toast.error(errorMessage);
     } finally {
       setSubmitting(false);
     }
