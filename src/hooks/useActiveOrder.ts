@@ -31,7 +31,8 @@ export function useActiveOrder(restaurantId: string | undefined, tableId: string
             const createdAt = o.created_at?.toMillis() ?? 0;
             const isRecent = (now - createdAt) < twelveHoursInMs;
             // Apenas ordens que não foram fechadas/canceladas ainda
-            return ACTIVE.includes(o.status) && (o.items_count ?? 0) > 0 && isRecent;
+            // Removemos o items_count > 0 para que o pedido apareça imediatamente após ser criado
+            return ACTIVE.includes(o.status) && isRecent;
           })
           .sort((a, b) => (b.created_at?.toMillis() ?? 0) - (a.created_at?.toMillis() ?? 0))[0] ?? null;
         

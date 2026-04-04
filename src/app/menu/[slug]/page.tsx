@@ -421,15 +421,27 @@ function MenuContent({ slug }: { slug: string }) {
   useEffect(() => {
     if (status === "success") {
       const timer = setTimeout(() => {
+        // Se for Dine-In, apenas limpa o carrinho e reseta o status local de "sucesso"
+        // mas NÃO volta para a landing page, permitindo ver o pedido ativo.
         setStatus("ready");
-        setModeSelected(false);
         setCart([]);
-        setShowLanding(true);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        
+        if (orderType !== "dine_in") {
+          setShowLanding(true);
+          setModeSelected(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [status]);
+  }, [status, orderType]);
+
+  // Se houver um pedido ativo, removemos a landing page automaticamente
+  useEffect(() => {
+    if (activeOrder && showLanding) {
+      setShowLanding(false);
+    }
+  }, [activeOrder, showLanding]);
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -471,8 +483,8 @@ function MenuContent({ slug }: { slug: string }) {
         tableLabel: tableLabel || "Mesa",
         type: "table_opening_request",
       });
-      // Atualiza o status da mesa para 'reserved' para sinalizar no PDV
-      await updateTable(finalTableId, { status: "reserved" });
+      // REMOVIDO: updateTable status='reserved'. 
+      // Isso deve ser feito pelo ADM após receber a notificação acima.
       
       toast.success("Solicitação enviada! Um garçom virá até você.");
     } catch (err) {
@@ -655,137 +667,138 @@ function MenuContent({ slug }: { slug: string }) {
     );
   }
 
-  if (status === "success") {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-8 text-center bg-zinc-950 text-white font-outfit">
-        <ThemeInjector color={restaurant?.branding?.primary_color} />
-        <div className="mb-8 rounded-full h-24 w-24 bg-green-500 flex items-center justify-center shadow-3xl shadow-green-500/20">
-          <Check className="h-12 w-12 text-white" />
-        </div>
-        <h1 className="text-4xl font-black text-white leading-tight tracking-tight">Pedido na<br/>Cozinha!</h1>
-        {orderNumber && (
-          <div className="mt-8 p-6 glass-morphism rounded-3xl w-full border border-white/5 shadow-2xl">
-            <p className="text-zinc-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Sua Senha</p>
-            <p className="text-6xl font-black text-primary-theme tracking-tighter">{orderNumber}</p>
-          </div>
-        )}
-        <button
-          onClick={() => setStatus("ready")}
-          className="mt-12 w-full bg-white text-black py-5 rounded-3xl font-black text-lg transition-transform active:scale-95 shadow-2xl"
-        >
-          Fazer outro pedido
-        </button>
-      </div>
-    );
-  }
-
-  if (showLanding && status === "ready") {
-    return (
-      <>
-        <ThemeInjector color={restaurant?.branding?.primary_color} />
-        <LandingHero 
-           restaurant={restaurant!} 
-           onEnter={() => { 
-             setShowLanding(false); 
-             window.scrollTo(0,0);
-           }} 
-        />
-      </>
-    );
-  }
-
-  // ─── Main Feed Render ───
+  // ─── Main Render ───
+  // Centralizamos os retornos para garantir que os Overlays sempre montem
+  
   const featuredProductsList = (products || []).filter(p => p.is_featured);
   const totalCartValue = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pb-32 font-outfit">
       <ThemeInjector color={restaurant?.branding?.primary_color} />
-      
-      {/* Mini-Header for Branding */}
-      <div className="p-8 pb-4 flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-black tracking-tighter leading-tight">{restaurant?.name}</h1>
-          {tableLabel && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary-theme/10 rounded-full border border-primary-theme/20">
-               <MapPin className="h-3 w-3 text-primary-theme" />
-               <span className="text-[10px] font-black text-primary-theme uppercase tracking-wider">{tableLabel}</span>
+
+      {/* 1. Sucesso do Pedido (Overlay Temporário) */}
+      {status === "success" && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-8 text-center bg-zinc-950 text-white animate-in fade-in duration-500">
+           <div className="mb-8 rounded-full h-24 w-24 bg-green-500 flex items-center justify-center shadow-[0_0_50px_rgba(34,197,94,0.3)]">
+            <Check className="h-12 w-12 text-white" />
+          </div>
+          <h1 className="text-4xl font-black text-white leading-tight tracking-tight">Pedido na<br/>Cozinha!</h1>
+          {orderNumber && (
+            <div className="mt-8 p-6 glass-morphism rounded-3xl w-full max-w-xs border border-white/5 shadow-2xl">
+              <p className="text-zinc-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Sua Senha</p>
+              <p className="text-6xl font-black text-primary-theme tracking-tighter">{orderNumber}</p>
             </div>
           )}
+          <button
+            onClick={() => setStatus("ready")}
+            className="mt-12 w-full max-w-xs bg-white text-black py-5 rounded-3xl font-black text-lg transition-transform active:scale-95 shadow-2xl"
+          >
+            Fazer outro pedido
+          </button>
         </div>
-        {restaurant?.logo_url && (
-          <img src={restaurant.logo_url} alt="Logo" className="h-10 w-10 rounded-xl object-contain bg-white/5 p-1.5" />
-        )}
-      </div>
+      )}
 
-      <StickyNav 
-        categories={categories} 
-        activeCategoryId={activeCatId} 
-        onSelect={scrollToCategory}
-      />
+      {/* 2. Landing Page (Se for a primeira vez e não tiver pedido) */}
+      {showLanding && status === "ready" && !activeOrder && (
+         <LandingHero 
+            restaurant={restaurant!} 
+            onEnter={() => { 
+                setShowLanding(false); 
+                window.scrollTo(0,0);
+            }} 
+         />
+      )}
 
-      <div className="px-6 py-8">
-        
-        {/* Featured Section */}
-        {featuredProductsList.length > 0 && (
-          <div className="mb-12 space-y-6">
-            <div className="flex items-center gap-2 px-1">
-              <Sparkles className="h-5 w-5 text-primary-theme" />
-              <h3 className="text-xl font-black tracking-tight">Destaques da Casa</h3>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none -mx-6 px-6">
-              {featuredProductsList.map((p) => (
-                <div 
-                  key={p.id}
-                  onClick={() => { setSelectedProduct(p); setDrawerOpen(true); }}
-                  className="shrink-0 w-64 aspect-[4/5] relative rounded-[2.5rem] overflow-hidden glass-morphism border border-white/5 active:scale-[0.98] transition-all duration-300"
-                >
-                  {p.image_url && (
-                    <img src={p.image_url} alt={p.name} className="absolute inset-0 w-full h-full object-cover opacity-80" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
-                  <div className="absolute bottom-6 left-6 right-6 space-y-2">
-                    <div className="bg-primary-theme px-3 py-1 rounded-full text-[10px] font-black uppercase w-fit text-white">Destaque</div>
-                    <h4 className="font-bold text-lg leading-tight line-clamp-2 text-white">{p.name}</h4>
-                    <p className="text-primary-theme font-black">{fmt(p.price)}</p>
-                  </div>
+      {/* 3. Cardápio / Feed Principal */}
+      {( (!showLanding && status === "ready") || (status === "success") || (activeOrder) ) && (
+        <>
+          {/* Mini-Header for Branding */}
+          <div className="p-8 pb-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-black tracking-tighter leading-tight">{restaurant?.name}</h1>
+              {tableLabel && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary-theme/10 rounded-full border border-primary-theme/20">
+                  <MapPin className="h-3 w-3 text-primary-theme" />
+                  <span className="text-[10px] font-black text-primary-theme uppercase tracking-wider">{tableLabel}</span>
                 </div>
-              ))}
+              )}
             </div>
+            {restaurant?.logo_url && (
+              <img src={restaurant.logo_url} alt="Logo" className="h-10 w-10 rounded-xl object-contain bg-white/5 p-1.5" />
+            )}
           </div>
-        )}
 
-        {categories.map((cat) => {
-          const catId = cat.category_id ?? cat.id;
-          return (
-            <section 
-              key={catId} 
-              ref={el => { if(el) sectionRefs.current.set(catId, el); }}
-              data-section-id={catId} 
-              className="scroll-mt-32 mb-12"
-            >
-              <div className="flex items-center gap-3 mb-8">
-                <div className="h-10 w-1.5 bg-primary-theme rounded-full shadow-lg shadow-primary-theme/20" />
-                <h2 className="text-3xl font-black tracking-tight">{cat.name}</h2>
-              </div>
-              <div className="grid grid-cols-1 gap-6">
-                {products
-                  .filter(p => (p.category_id ?? p.id) === catId)
-                  .map((p) => (
-                    <FeedCard 
-                      key={p.id} 
-                      product={p} 
-                      onOpenDrawer={(prod) => {
-                        setSelectedProduct(prod);
-                        setDrawerOpen(true);
-                      }}
-                    />
+          <StickyNav 
+            categories={categories} 
+            activeCategoryId={activeCatId} 
+            onSelect={scrollToCategory}
+          />
+
+          <div className="px-6 py-8">
+            {/* Featured Section */}
+            {featuredProductsList.length > 0 && (
+              <div className="mb-12 space-y-6">
+                <div className="flex items-center gap-2 px-1">
+                  <Sparkles className="h-5 w-5 text-primary-theme" />
+                  <h3 className="text-xl font-black tracking-tight">Destaques da Casa</h3>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none -mx-6 px-6">
+                  {featuredProductsList.map((p) => (
+                    <div 
+                      key={p.id}
+                      onClick={() => { setSelectedProduct(p); setDrawerOpen(true); }}
+                      className="shrink-0 w-64 aspect-[4/5] relative rounded-[2.5rem] overflow-hidden glass-morphism border border-white/5 active:scale-[0.98] transition-all duration-300"
+                    >
+                      {p.image_url && (
+                        <img src={p.image_url} alt={p.name} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
+                      <div className="absolute bottom-6 left-6 right-6 space-y-2">
+                        <div className="bg-primary-theme px-3 py-1 rounded-full text-[10px] font-black uppercase w-fit text-white">Destaque</div>
+                        <h4 className="font-bold text-lg leading-tight line-clamp-2 text-white">{p.name}</h4>
+                        <p className="text-primary-theme font-black">{fmt(p.price)}</p>
+                      </div>
+                    </div>
                   ))}
+                </div>
               </div>
-            </section>
-          );
-        })}
-      </div>
+            )}
+
+            {categories.map((cat) => {
+              const catId = cat.category_id ?? cat.id;
+              return (
+                <section 
+                  key={catId} 
+                  ref={el => { if(el) sectionRefs.current.set(catId, el); }}
+                  data-section-id={catId} 
+                  className="scroll-mt-32 mb-12"
+                >
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="h-10 w-1.5 bg-primary-theme rounded-full shadow-lg shadow-primary-theme/20" />
+                    <h2 className="text-3xl font-black tracking-tight">{cat.name}</h2>
+                  </div>
+                  <div className="grid grid-cols-1 gap-6">
+                    {products
+                      .filter(p => (p.category_id ?? p.id) === catId)
+                      .map((p) => (
+                        <FeedCard 
+                          key={p.id} 
+                          product={p} 
+                          onOpenDrawer={(prod) => {
+                            setSelectedProduct(prod);
+                            setDrawerOpen(true);
+                          }}
+                        />
+                      ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </>
+      )}
+
 
       <CustomizationDrawer 
         product={selectedProduct}
