@@ -10,7 +10,7 @@ const db = admin.firestore();
 
 // 1. Atribuição de Custom Claims e Profile (v1)
 // Chamado pelo App React para initial Onboarding do Admin, ou para convite de Time.
-export const setCustomClaimsAndProfile = functions.region("us-central1").https.onCall(async (data, context) => {
+export const setCustomClaimsAndProfile = functions.region("us-central1").https.onCall(async (data: any, context: functions.https.CallableContext) => {
   const auth = context.auth;
   if (!auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be logged in");
@@ -54,8 +54,8 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
   // --- Fluxo 2: Convidar Equipe (Garçom / Cozinha / Admin) ---
   if (data.action === "invite_staff") {
     try {
-      let myRestaurantId = auth?.token?.restaurant_id;
-      let myRole = auth?.token?.role;
+      let myRestaurantId = (auth.token as any).restaurant_id;
+      let myRole = (auth.token as any).role;
 
       // 1. Log para Depuração 
       functions.logger.info(`Invite Staff Triggered: Requester UID=${auth.uid}, Role=${myRole}, RestID=${myRestaurantId}`);
@@ -156,7 +156,7 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
         throw new functions.https.HttpsError("failed-precondition", "Este convite não está mais pendente.");
       }
 
-      const { restaurant_id, role, email: inviteEmail } = invData;
+      const { restaurant_id, role, email: inviteEmail } = invData as any;
 
       // 1. Seta Custom Claims
       await admin.auth().setCustomUserClaims(auth.uid, {
@@ -169,8 +169,8 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
         uid: auth.uid,
         restaurant_id: restaurant_id,
         role: role,
-        name: name || invData.name,
-        email: auth.token.email || inviteEmail || "",
+        name: name || (invData as any).name,
+        email: (auth.token as any).email || inviteEmail || "",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
