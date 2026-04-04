@@ -117,23 +117,23 @@ export default function LoginPage() {
       }
 
     } catch (err: any) {
-      console.error("Login/Register Error:", err.code, err.message);
+      console.error("Login/Register Erro Detalhado:", err);
       
       if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-        toast.error("Email ou senha incorretos. Se este é seu primeiro acesso, clique em 'Cadastre-se grátis' logo acima.");
+        toast.error("Email ou senha incorretos.");
       } else if (err.code === "auth/email-already-in-use") {
         if (inviteId) {
-          toast.info("Você já possui uma conta! Faça login para aceitar o convite automaticamente.");
+          toast.info("Este e-mail já tem conta! Faça login para aceitar o convite.");
           setIsLogin(true);
         } else {
-          toast.error("Este email já está cadastrado. Tente fazer login.");
+          toast.error("E-mail já cadastrado. Tente fazer login.");
         }
-      } else if (err.code === "auth/operation-not-allowed") {
-
-        toast.error("O provedor de E-mail/Senha não está ativado no Firebase Console.");
       } else {
-        toast.error("Ocorreu um erro ao autenticar. Verifique sua conexão ou as configurações do Firebase.");
+        // Mostra a mensagem real do Firebase/Cloud Function
+        const msg = err?.message || "Erro inesperado ao autenticar.";
+        toast.error(msg);
       }
+
     } finally {
       setLoading(false);
     }

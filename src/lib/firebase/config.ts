@@ -19,7 +19,8 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
-const functions = getFunctions(app);
+const functions = getFunctions(app, "us-central1");
+
 
 // Messaging só funciona no navegador
 let messaging: Messaging | undefined;
