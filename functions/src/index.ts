@@ -7,15 +7,13 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const logger = functions.logger;
-const HttpsError = functions.https.HttpsError;
 
 // 1. Atribuição de Custom Claims e Profile (v1)
 // Chamado pelo App React para initial Onboarding do Admin, ou para convite de Time.
 export const setCustomClaimsAndProfile = functions.region("us-central1").https.onCall(async (data, context) => {
   const auth = context.auth;
   if (!auth) {
-    throw new HttpsError("unauthenticated", "User must be logged in");
+    throw new functions.https.HttpsError("unauthenticated", "User must be logged in");
   }
 
   // --- Fluxo 1: Onboarding de Dono de Restaurante ---
@@ -60,7 +58,7 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
       let myRole = auth?.token?.role;
 
       // 1. Log para Depuração 
-      logger.info(`Invite Staff Triggered: Requester UID=${auth.uid}, Role=${myRole}, RestID=${myRestaurantId}`);
+      functions.logger.info(`Invite Staff Triggered: Requester UID=${auth.uid}, Role=${myRole}, RestID=${myRestaurantId}`);
 
       if (!myRole || !myRestaurantId) {
         const userDoc = await db.collection("users").doc(auth.uid).get();
@@ -83,17 +81,17 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
       }
 
       if (myRole !== "admin") {
-        throw new HttpsError("permission-denied", "Apenas administradores podem convidar membros.");
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem convidar membros.");
       }
       
       if (!myRestaurantId) {
-        throw new HttpsError("failed-precondition", "Não foi possível identificar o seu restaurante.");
+        throw new functions.https.HttpsError("failed-precondition", "Não foi possível identificar o seu restaurante.");
       }
 
       const { role, name, email, password } = data;
 
       if (!email || !password || !name || !role) {
-        throw new HttpsError("invalid-argument", "Todos os campos são obrigatórios.");
+        throw new functions.https.HttpsError("invalid-argument", "Todos os campos são obrigatórios.");
       }
 
       // 2. Criar usuário no Auth
@@ -106,9 +104,9 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
         });
       } catch (authError: any) {
         if (authError.code === "auth/email-already-exists") {
-          throw new HttpsError("already-exists", "Este e-mail já está sendo usado.");
+          throw new functions.https.HttpsError("already-exists", "Este e-mail já está sendo usado.");
         }
-        throw new HttpsError("internal", `Erro no Auth: ${authError.message}`);
+        throw new functions.https.HttpsError("internal", `Erro no Auth: ${authError.message}`);
       }
       const targetUid = targetUser.uid;
 
@@ -128,15 +126,15 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
         });
       } catch (postAuthErr: any) {
-        throw new HttpsError("internal", `Erro pós-criação: ${postAuthErr.message}`);
+        throw new functions.https.HttpsError("internal", `Erro pós-criação: ${postAuthErr.message}`);
       }
 
       return { success: true, role, restaurant_id: myRestaurantId, targetUid };
 
     } catch (globalErr: any) {
-       logger.error("Global Error in invite_staff:", globalErr);
-       if (globalErr instanceof HttpsError) throw globalErr;
-       throw new HttpsError("internal", `Erro crítico: ${globalErr.message}`);
+       functions.logger.error("Global Error in invite_staff:", globalErr);
+       if (globalErr instanceof functions.https.HttpsError) throw globalErr;
+       throw new functions.https.HttpsError("internal", `Erro crítico: ${globalErr.message}`);
     }
   }
 
@@ -144,18 +142,18 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
   if (data.action === "claim_invitation") {
     try {
       const { inviteId, name } = data;
-      if (!inviteId) throw new HttpsError("invalid-argument", "ID de convite ausente.");
+      if (!inviteId) throw new functions.https.HttpsError("invalid-argument", "ID de convite ausente.");
 
       const inviteRef = db.collection("invitations").doc(inviteId);
       const inviteSnap = await inviteRef.get();
 
       if (!inviteSnap.exists) {
-        throw new HttpsError("not-found", "Convite não encontrado.");
+        throw new functions.https.HttpsError("not-found", "Convite não encontrado.");
       }
 
       const invData = inviteSnap.data();
       if (invData?.status !== "pending") {
-        throw new HttpsError("failed-precondition", "Este convite não está mais pendente.");
+        throw new functions.https.HttpsError("failed-precondition", "Este convite não está mais pendente.");
       }
 
       const { restaurant_id, role, email: inviteEmail } = invData;
@@ -184,17 +182,17 @@ export const setCustomClaimsAndProfile = functions.region("us-central1").https.o
         accepted_by: auth.uid,
       });
 
-      logger.info(`Invitation ${inviteId} accepted by UID=${auth.uid}`);
+      functions.logger.info(`Invitation ${inviteId} accepted by UID=${auth.uid}`);
       return { success: true, restaurant_id, role };
 
     } catch (err: any) {
-      logger.error("Error in claim_invitation:", err);
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError("internal", `Erro ao aceitar convite: ${err.message}`);
+      functions.logger.error("Error in claim_invitation:", err);
+      if (err instanceof functions.https.HttpsError) throw err;
+      throw new functions.https.HttpsError("internal", `Erro ao aceitar convite: ${err.message}`);
     }
   }
 
-  throw new HttpsError("invalid-argument", "Action not understood");
+  throw new functions.https.HttpsError("invalid-argument", "Action not understood");
 });
 
 
@@ -230,7 +228,7 @@ export const assignSequentialOrderNumber = onDocumentCreated(
       await snap.ref.update({ order_number: orderNumber });
       
     } catch (err) {
-      logger.error(`Erro ao transacionar order_number`, err);
+      functions.logger.error(`Erro ao transacionar order_number`, err);
     }
   }
 );
@@ -251,7 +249,7 @@ export const onRestaurantCreatedPulse = onDocumentCreated("restaurants/{restaura
       updated_at: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   });
-  logger.info("Pulse: Contador incrementado");
+  functions.logger.info("Pulse: Contador incrementado");
 });
 
 export const onRestaurantDeletedPulse = onDocumentDeleted("restaurants/{restaurantId}", async (event) => {
@@ -266,7 +264,7 @@ export const onRestaurantDeletedPulse = onDocumentDeleted("restaurants/{restaura
       updated_at: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   });
-  logger.info("Pulse: Contador decrementado");
+  functions.logger.info("Pulse: Contador decrementado");
 });
 
 // 5. Notifications
@@ -324,8 +322,8 @@ export const onNotificationCreated = onDocumentCreated("notifications/{notifId}"
 
   try {
     const response = await admin.messaging().sendEachForMulticast(payload);
-    logger.info(`Notificações enviadas: ${response.successCount}`);
+    functions.logger.info(`Notificações enviadas: ${response.successCount}`);
   } catch (err) {
-    logger.error("Erro FCM:", err);
+    functions.logger.error("Erro FCM:", err);
   }
 });
