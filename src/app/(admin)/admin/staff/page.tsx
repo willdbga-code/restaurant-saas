@@ -13,6 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Copy, Link2, Mail, CheckCircle2 } from "lucide-react";
+import { db } from "@/lib/firebase/config";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+
 
 const ROLE_ICONS = {
   admin: Shield,
@@ -40,31 +44,44 @@ export default function StaffPage() {
     role: "waiter" as "admin" | "waiter" | "kitchen",
   });
 
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
   async function handleInvite() {
-    if (!formData.name || !formData.email || !formData.password || !formData.role) {
-      toast.error("Preencha todos os campos.");
+    if (!formData.name || !formData.email || !formData.role) {
+      toast.error("Preencha nome, e-mail e cargo.");
       return;
     }
     setSubmitting(true);
     try {
-      const inviteFn = httpsCallable(functions, "setCustomClaimsAndProfile");
-      await inviteFn({
-        action: "invite_staff",
+      // Cria o convite no Firestore
+      const docRef = await addDoc(collection(db, "invitations"), {
         restaurant_id: user?.restaurant_id,
-        ...formData,
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        status: "pending",
+        created_at: serverTimestamp(),
       });
-      toast.success(`Membro ${formData.name} adicionado com sucesso!`);
-      setDialogOpen(false);
-      setFormData({ name: "", email: "", password: "", role: "waiter" });
+
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+      const link = `${baseUrl}/invite/${docRef.id}`;
+      setInviteLink(link);
+      
+      toast.success(`Convite para ${formData.name} gerado!`);
+      // Não fechamos o diálogo ainda, vamos mostrar o link
     } catch (error: any) {
       console.error("Staff Invite Error:", error);
-      // Extrai a mensagem de erro vinda da Cloud Function (HttpsError)
-      const errorMessage = error?.message || "Erro inesperado ao convidar membro.";
-      toast.error(errorMessage);
+      toast.error("Erro ao gerar convite.");
     } finally {
       setSubmitting(false);
     }
   }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Link copiado!");
+  };
+
 
   if (loading) {
     return (
@@ -149,17 +166,6 @@ export default function StaffPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password" className="text-zinc-300">Senha Provisória</Label>
-              <Input
-                id="password"
-                type="text"
-                value={formData.password}
-                onChange={(e) => setFormData((s) => ({ ...s, password: e.target.value }))}
-                placeholder="Ex: senhaSegura123"
-                className="border-zinc-700 bg-zinc-900 text-white"
-              />
-            </div>
-            <div className="grid gap-2">
               <Label htmlFor="role" className="text-zinc-300">Cargo / Acesso</Label>
               <Select value={formData.role} onValueChange={(v: any) => setFormData((s) => ({ ...s, role: v }))}>
                 <SelectTrigger className="border-zinc-700 bg-zinc-900 text-white">
@@ -172,17 +178,53 @@ export default function StaffPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {inviteLink && (
+              <div className="mt-4 space-y-3 rounded-lg bg-orange-500/10 p-4 border border-orange-500/20">
+                <div className="flex items-center gap-2 text-orange-400">
+                  <Link2 className="h-4 w-4" />
+                  <span className="text-sm font-bold">Link de Convite Gerado</span>
+                </div>
+                <p className="text-xs text-zinc-400">Envie este link para o funcionário criar a conta:</p>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    readOnly 
+                    value={inviteLink} 
+                    className="h-8 border-zinc-700 bg-zinc-900 text-[10px] text-zinc-300"
+                  />
+                  <Button 
+                    size="sm" 
+                    onClick={() => copyToClipboard(inviteLink)}
+                    className="h-8 bg-orange-500 text-white hover:bg-orange-600"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
+
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialogOpen(false)} className="text-zinc-400 hover:bg-zinc-800 hover:text-white">
-              Cancelar
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                setDialogOpen(false);
+                setInviteLink(null);
+                setFormData({ name: "", email: "", password: "", role: "waiter" });
+              }} 
+              className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            >
+              {inviteLink ? "Fechar" : "Cancelar"}
             </Button>
-            <Button onClick={handleInvite} disabled={submitting} className="bg-orange-500 text-white hover:bg-orange-600">
-              {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Adicionar
-            </Button>
+            {!inviteLink && (
+              <Button onClick={handleInvite} disabled={submitting} className="bg-orange-500 text-white hover:bg-orange-600">
+                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Gerar Link de Convite
+              </Button>
+            )}
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
     </div>

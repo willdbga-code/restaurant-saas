@@ -152,12 +152,65 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
 
     } catch (globalErr: any) {
        logger.error("Global Error in invite_staff:", globalErr);
-       // Se for um HttpsError, repassa
        if (globalErr instanceof HttpsError) throw globalErr;
-       // Caso contrário, encapsula
        throw new HttpsError("internal", `Erro crítico no servidor: ${globalErr.message}`);
     }
   }
+
+  // --- Fluxo 3: Reivindicar Convite (Aceite de Equipe) ---
+  if (data.action === "claim_invitation") {
+    try {
+      const { inviteId, name } = data;
+      if (!inviteId) throw new HttpsError("invalid-argument", "ID de convite ausente.");
+
+      const inviteRef = db.collection("invitations").doc(inviteId);
+      const inviteSnap = await inviteRef.get();
+
+      if (!inviteSnap.exists) {
+        throw new HttpsError("not-found", "Convite não encontrado.");
+      }
+
+      const invData = inviteSnap.data();
+      if (invData?.status !== "pending") {
+        throw new HttpsError("failed-precondition", "Este convite não está mais pendente.");
+      }
+
+      const { restaurant_id, role, email: inviteEmail } = invData;
+
+      // 1. Seta Custom Claims no usuário logado que está aceitando
+      await admin.auth().setCustomUserClaims(auth.uid, {
+        restaurant_id: restaurant_id,
+        role: role,
+      });
+
+      // 2. Cria/Atualiza perfil no Firestore
+      await db.collection("users").doc(auth.uid).set({
+        uid: auth.uid,
+        restaurant_id: restaurant_id,
+        role: role,
+        name: name || invData.name,
+        email: auth.token.email || inviteEmail || "",
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 3. Marca convite como aceito
+      await inviteRef.update({
+        status: "accepted",
+        accepted_at: admin.firestore.FieldValue.serverTimestamp(),
+        accepted_by: auth.uid,
+      });
+
+      logger.info(`Invitation ${inviteId} accepted by UID=${auth.uid} for Restaurant=${restaurant_id}`);
+      return { success: true, restaurant_id, role };
+
+    } catch (err: any) {
+      logger.error("Error in claim_invitation:", err);
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError("internal", `Erro ao aceitar convite: ${err.message}`);
+    }
+  }
+
 
 
   throw new HttpsError("invalid-argument", "Action not understood");

@@ -153,6 +153,14 @@ service cloud.firestore {
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
+    // --- Invitations (Staff Onboarding) ---------------------------------------
+    match /invitations/{inviteId} {
+      allow read: if true; // Public to verify the invitation
+      allow create: if (isAdmin() || isSuperAdmin());
+      allow update, delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
+    }
+
+
     // --------------------------------------------------------------------------
     // ALERTS & NOTIFICATIONS
     // --------------------------------------------------------------------------

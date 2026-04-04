@@ -5,9 +5,15 @@ import { useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { db } from "@/lib/firebase/config";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { ChefHat, Loader2 } from "lucide-react";
+import { ChefHat, Loader2, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { functions } from "@/lib/firebase/config";
+import { httpsCallable } from "firebase/functions";
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+
+
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,6 +30,26 @@ export default function LoginPage() {
   const [restaurantName, setRestaurantName] = useState("");
   const [slug, setSlug] = useState("");
 
+  const [inviteId, setInviteId] = useState<string | null>(null);
+  const [inviteData, setInviteData] = useState<any>(null);
+
+  useEffect(() => {
+    const invId = searchParams?.get("invite");
+    if (invId) {
+      setInviteId(invId);
+      // Busca info do convite para pre-encher
+      getDoc(doc(db, "invitations", invId)).then(snap => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setInviteData(data);
+          setEmail(data.email || "");
+          setName(data.name || "");
+        }
+      });
+    }
+  }, [searchParams]);
+
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -34,36 +60,48 @@ export default function LoginPage() {
         toast.success("Login realizado com sucesso!");
         router.push("/admin");
       } else {
-        // Fluxo de Cadastro (Onboarding do 1º Admin)
+        // Fluxo de Cadastro
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(userCred.user, { displayName: name });
-
         const userId = userCred.user.uid;
-        const restaurantId = "rest_" + Date.now().toString(36);
-        const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, "");
 
-        // Cria os documentos no Firestore diretamente (sem Cloud Function)
-        await setDoc(doc(db, "restaurants", restaurantId), {
-          restaurant_id: restaurantId,
-          name: restaurantName,
-          slug: cleanSlug,
-          owner_uid: userId,
-          is_active: true,
-          created_at: serverTimestamp(),
-        });
+        if (inviteId) {
+          // --- Fluxo de Membro Convidado ---
+          const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
+          await claimFn({
+            action: "claim_invitation",
+            inviteId: inviteId,
+            name: name,
+          });
+          toast.success("Convite aceito! Bem-vindo à equipe.");
+        } else {
+          // --- Fluxo de Onboarding de Novo Dono ---
+          const restaurantId = "rest_" + Date.now().toString(36);
+          const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, "");
 
-        await setDoc(doc(db, "users", userId), {
-          uid: userId,
-          restaurant_id: restaurantId,
-          role: "admin",
-          name: name,
-          email: email,
-          created_at: serverTimestamp(),
-        });
+          await setDoc(doc(db, "restaurants", restaurantId), {
+            restaurant_id: restaurantId,
+            name: restaurantName,
+            slug: cleanSlug,
+            owner_uid: userId,
+            is_active: true,
+            created_at: serverTimestamp(),
+          });
 
-        toast.success("Conta criada! Bem-vindo ao seu painel.");
+          await setDoc(doc(db, "users", userId), {
+            uid: userId,
+            restaurant_id: restaurantId,
+            role: "admin",
+            name: name,
+            email: email,
+            created_at: serverTimestamp(),
+          });
+          toast.success("Conta criada! Bem-vindo ao seu painel.");
+        }
+
         router.push("/admin");
       }
+
     } catch (err: any) {
       console.error("Login/Register Error:", err.code, err.message);
       
@@ -113,15 +151,20 @@ export default function LoginPage() {
                     <label className="block text-sm font-medium leading-6 text-white">Seu Nome</label>
                     <input required value={name} onChange={(e) => setName(e.target.value)} type="text" className="mt-2 block w-full rounded-md border-0 bg-zinc-900 py-1.5 text-white shadow-sm ring-1 ring-inset ring-zinc-800 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium leading-6 text-white">Nome do Restaurante</label>
-                    <input required value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} type="text" className="mt-2 block w-full rounded-md border-0 bg-zinc-900 py-1.5 text-white shadow-sm ring-1 ring-inset ring-zinc-800 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium leading-6 text-white">Slug (para o QR Menu)</label>
-                    <input required value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="meu-restaurante" type="text" className="mt-2 block w-full rounded-md border-0 bg-zinc-900 py-1.5 text-white shadow-sm ring-1 ring-inset ring-zinc-800 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6" />
-                  </div>
+                  {!inviteId && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium leading-6 text-white">Nome do Restaurante</label>
+                        <input required value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} type="text" className="mt-2 block w-full rounded-md border-0 bg-zinc-900 py-1.5 text-white shadow-sm ring-1 ring-inset ring-zinc-800 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium leading-6 text-white">Slug (para o QR Menu)</label>
+                        <input required value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="meu-restaurante" type="text" className="mt-2 block w-full rounded-md border-0 bg-zinc-900 py-1.5 text-white shadow-sm ring-1 ring-inset ring-zinc-800 focus:ring-2 focus:ring-inset focus:ring-orange-500 sm:text-sm sm:leading-6" />
+                      </div>
+                    </>
+                  )}
                 </>
+
               )}
               
               <div>
