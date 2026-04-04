@@ -18,14 +18,20 @@ service cloud.firestore {
     function myRestaurantId() {
       return isAuthed() && request.auth.token.get('restaurant_id', null) != null 
         ? request.auth.token.restaurant_id 
-        : (isAuthed() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('restaurant_id', null) : null);
+        : (isAuthed() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+           ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('restaurant_id', null) 
+           : null);
     }
+
 
     function myRole() {
       return isAuthed() && request.auth.token.get('role', 'customer') != 'customer'
         ? request.auth.token.role
-        : (isAuthed() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'customer') : 'customer');
+        : (isAuthed() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+           ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'customer') 
+           : 'customer');
     }
+
 
     function isSuperAdmin() {
       return isAuthed() && (
@@ -141,9 +147,8 @@ service cloud.firestore {
     // --------------------------------------------------------------------------
     match /tables/{tableId} {
       allow read: if true;
-      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin()) && (
-        isSuperAdmin() || (get(/databases/$(database)/documents/restaurants/$(myRestaurantId())).data.table_count < getPlanTablesLimit(myRestaurantId()))
-      );
+      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
+
       allow update: if (isStaff()) && (resourceIsMyRestaurant() || isSuperAdmin());
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
