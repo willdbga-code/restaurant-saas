@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs, getDoc, doc } from "firebase/firestore";
+
 import { Order, OrderItem, OrderPayment, PaymentMethod } from "@/lib/firebase/orders";
 import { 
   BarChart3, Calendar, Search, Receipt, 
@@ -54,8 +57,32 @@ export default function SalesReport() {
   const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
   const [feedbackUrl, setFeedbackUrl] = useState("");
   const [wifiInfo, setWifiInfo] = useState("");
+  const searchParams = useSearchParams();
+
+  // Handle URL params for direct view/print
+  useEffect(() => {
+    const orderId = searchParams.get("order");
+    const autoPrint = searchParams.get("print") === "true";
+
+    if (orderId && user?.restaurant_id) {
+       const fetchAndSelect = async () => {
+          const docRef = doc(db, "orders", orderId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+             const orderData = { id: snap.id, ...snap.data() } as Order;
+             const details = await handleViewDetails(orderData);
+             if (autoPrint && details) {
+                // Short delay to ensure state updates
+                setTimeout(() => handlePrint(), 500);
+             }
+          }
+       };
+       fetchAndSelect();
+    }
+  }, [searchParams, user?.restaurant_id]);
 
   useEffect(() => {
+
     if (!user?.restaurant_id) return;
 
     const start = new Date(selectedDate);
@@ -84,6 +111,7 @@ export default function SalesReport() {
     return () => unsub();
   }, [user?.restaurant_id, selectedDate]);
 
+
   async function handleViewDetails(order: Order) {
     setSelectedOrder(order);
     setDetailLoading(true);
@@ -111,12 +139,15 @@ export default function SalesReport() {
           setFeedbackUrl(`${window.location.origin}/menu/${slug}?table=${order.table_id || "balcao"}`);
         }
       }
+      return true;
     } catch (err) {
       toast.error("Erro ao carregar detalhes.");
+      return false;
     } finally {
       setDetailLoading(false);
     }
   }
+
 
   // --- Printing ---
   function handlePrint() {

@@ -7,14 +7,19 @@ import { onSnapshot, collection, query, where, doc, updateDoc, Timestamp } from 
 
 import { db } from "@/lib/firebase/config";
 import { playNotificationSound } from "@/lib/utils/sound";
-import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check, Bell, Lock, BarChart3, Banknote, ArrowUpRight, ArrowDownLeft, Wallet } from "lucide-react";
+import { Loader2, Users, ArrowRight, Plus, QrCode, X, Check, Bell, Lock, BarChart3, Banknote, ArrowUpRight, ArrowDownLeft, Wallet, History, Eye, Printer as PrinterIcon } from "lucide-react";
 import { Order } from "@/lib/firebase/orders";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { orderBy, limit } from "firebase/firestore";
+
 
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { updateTable } from "@/lib/firebase/firestore";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -45,6 +50,9 @@ export default function PDVPage() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [todayTotal, setTodayTotal] = useState(0);
   const [activeOrders, setActiveOrders] = useState<Record<string, Order>>({});
+  const [closedOrders, setClosedOrders] = useState<Order[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
 
 
 
@@ -168,6 +176,26 @@ export default function PDVPage() {
     return () => unsub();
   }, [user?.restaurant_id]);
 
+  // Listener de Histórico (Últimos 15 pedidos fechados)
+  useEffect(() => {
+    if (!user?.restaurant_id) return;
+
+    const q = query(
+      collection(db, "orders"),
+      where("restaurant_id", "==", user.restaurant_id),
+      where("status", "==", "closed"),
+      orderBy("updated_at", "desc"),
+      limit(15)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      setClosedOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
+    });
+
+    return () => unsub();
+  }, [user?.restaurant_id]);
+
+
 
 
   async function handleOpenTable(table: Table) {
@@ -213,6 +241,14 @@ export default function PDVPage() {
              </span>
           </div>
 
+
+          <Button 
+            onClick={() => setHistoryOpen(true)}
+            variant="outline"
+            className="flex-1 border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white sm:flex-none h-10 px-4"
+          >
+            <History className="mr-2 h-4 w-4 text-blue-400" /> Histórico
+          </Button>
 
           <Button 
             onClick={() => router.push("/admin/sales-report")}
@@ -376,6 +412,90 @@ export default function PDVPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* History Drawer */}
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md border-l-zinc-800 bg-zinc-950 p-0 text-white">
+          <SheetHeader className="border-b border-zinc-800 p-6">
+            <SheetTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+               <History className="h-5 w-5 text-blue-400" />
+               Histórico Recente
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {closedOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-2">
+                 <History className="h-10 w-10 opacity-20" />
+                 <p className="text-sm">Nenhum pedido fechado hoje.</p>
+              </div>
+            ) : (
+              closedOrders.map((order) => (
+                <div 
+                  key={order.id}
+                  className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-5 hover:bg-zinc-900 transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Pedido #{order.order_number}</span>
+                      <span className="text-sm font-bold text-white leading-tight">{order.table_label || "Balcão"}</span>
+                    </div>
+                    <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[9px] uppercase font-black">
+                       Fechado
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
+                    <div className="flex flex-col">
+                       <span className="text-[10px] uppercase font-bold text-zinc-600">Total Pago</span>
+                       <span className="text-lg font-black text-white">
+                         {(order.amount_paid / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                       </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                       <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         className="h-9 w-9 rounded-xl bg-zinc-800/50 text-zinc-400 hover:text-white"
+                         onClick={() => router.push(`/admin/sales-report?order=${order.id}`)}
+                       >
+                         <Eye className="h-4 w-4" />
+                       </Button>
+                       <Button 
+                         variant="outline" 
+                         size="icon"
+                         className="h-9 w-9 rounded-xl border-zinc-700 bg-zinc-800/50 text-zinc-300 hover:bg-blue-500 hover:border-blue-500 hover:text-white transition-all shadow-lg shadow-blue-500/0 hover:shadow-blue-500/20"
+                         onClick={() => {
+                            // Link para o componente de impressão se necessário, 
+                            // por agora redirecionar para ver e imprimir no relatório
+                            router.push(`/admin/sales-report?order=${order.id}&print=true`);
+                         }}
+                       >
+                         <PrinterIcon className="h-4 w-4" />
+                       </Button>
+                    </div>
+                  </div>
+                  
+                  <p className="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">
+                     Fechado em: {order.updated_at?.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <div className="p-6 border-t border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
+             <Button 
+                onClick={() => router.push("/admin/sales-report")}
+                className="w-full bg-zinc-800 text-white hover:bg-zinc-700 font-bold"
+             >
+                Ver Histórico Completo
+             </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
+
   );
 }
