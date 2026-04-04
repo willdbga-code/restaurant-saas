@@ -53,95 +53,112 @@ export const setCustomClaimsAndProfile = onCall(async (request) => {
 
   // --- Fluxo 2: Convidar Equipe (Garçom / Cozinha / Admin) ---
   if (data.action === "invite_staff") {
-    let myRestaurantId = auth.token.restaurant_id;
-    let myRole = auth.token.role;
+    try {
+      let myRestaurantId = auth?.token?.restaurant_id;
+      let myRole = auth?.token?.role;
 
-    // 1. Log para Depuração (Essencial para entender falhas de permissão)
-    logger.info(`Invite Staff: Requester UID=${auth.uid}, Role=${myRole}, RestID=${myRestaurantId}`);
+      // 1. Log para Depuração (Essencial para entender falhas de permissão)
+      logger.info(`Invite Staff Triggered: Requester UID=${auth.uid}, Role=${myRole}, RestID=${myRestaurantId}`);
 
-    // Se o usuário foi criado direto no frontend, ele não terá custom claims no token ainda.
-    // Lemos do Firestore para validar e aproveitar para "curar" (self-heal) o token.
-    if (!myRole || !myRestaurantId) {
-      const userDoc = await db.collection("users").doc(auth.uid).get();
-      if (userDoc.exists) {
-        const udata = userDoc.data();
-        myRole = udata?.role;
-        myRestaurantId = udata?.restaurant_id;
-        
-        // Aplica os claims que faltavam no dono se ele for admin e tiver rest_id no doc
-        if (myRole === "admin" && myRestaurantId) {
-          logger.info(`Self-healing Admin Claims for ${auth.uid}`);
-          await admin.auth().setCustomUserClaims(auth.uid, {
-            restaurant_id: myRestaurantId,
-            role: "admin",
-          });
+      // Se o usuário foi criado direto no frontend, ele não terá custom claims no token ainda.
+      // Lemos do Firestore para validar e aproveitar para "curar" (self-heal) o token.
+      if (!myRole || !myRestaurantId) {
+        logger.info(`Claims missing in token, checking Firestore for UID=${auth.uid}`);
+        const userDoc = await db.collection("users").doc(auth.uid).get();
+        if (userDoc.exists) {
+          const udata = userDoc.data();
+          myRole = udata?.role;
+          myRestaurantId = udata?.restaurant_id;
+          
+          // Aplica os claims que faltavam no dono se ele for admin e tiver rest_id no doc
+          if (myRole === "admin" && myRestaurantId) {
+            logger.info(`Self-healing Admin Claims for ${auth.uid} with RestID=${myRestaurantId}`);
+            await admin.auth().setCustomUserClaims(auth.uid, {
+              restaurant_id: myRestaurantId,
+              role: "admin",
+            });
+          }
+        } else {
+           logger.error(`User document not found for UID=${auth.uid}`);
         }
       }
-    }
 
-    // Se ainda não temos o restID no token/doc, mas veio no data (segurança menor, mas útil para o primeiro setup)
-    if (!myRestaurantId && data.restaurant_id) {
-      myRestaurantId = data.restaurant_id;
-    }
-
-    if (myRole !== "admin") {
-      throw new HttpsError("permission-denied", "Apenas administradores podem convidar membros.");
-    }
-    
-    if (!myRestaurantId) {
-      throw new HttpsError("failed-precondition", "Não foi possível identificar o seu restaurante.");
-    }
-
-    const { role, name, email, password } = data; // role: waiter, kitchen, admin
-
-    if (!email || !password || !name || !role) {
-      throw new HttpsError("invalid-argument", "Todos os campos (nome, email, senha, cargo) são obrigatórios.");
-    }
-
-    // 2. Criar usuário no Auth via Admin SDK
-    let targetUser;
-    try {
-      targetUser = await admin.auth().createUser({
-        email: email,
-        password: password,
-        displayName: name,
-      });
-      logger.info(`User Created: UID=${targetUser.uid}, Email=${email}`);
-    } catch (e: any) {
-      logger.error("Error creating user in Auth:", e);
-      // Tratamento de erro amigável para e-mail já existente
-      if (e.code === "auth/email-already-exists") {
-        throw new HttpsError("already-exists", "Este e-mail já está sendo usado por outro usuário.");
+      // Se ainda não temos o restID no token/doc, mas veio no data (segurança menor, mas útil para o primeiro setup)
+      if (!myRestaurantId && data.restaurant_id) {
+        logger.info(`Using restaurant_id from request data as fallback: ${data.restaurant_id}`);
+        myRestaurantId = data.restaurant_id;
       }
-      throw new HttpsError("internal", e.message || "Erro interno ao criar conta no Firebase Auth.");
-    }
-    const targetUid = targetUser.uid;
 
-    try {
-      // 3. Seta Custom Claims
-      await admin.auth().setCustomUserClaims(targetUid, {
-        restaurant_id: myRestaurantId,
-        role: role, 
-      });
-
-      // 4. Cria documento no Firestore
-      await db.collection("users").doc(targetUid).set({
-        uid: targetUid,
-        restaurant_id: myRestaurantId,
-        role: role,
-        name: name,
-        email: email,
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      if (myRole !== "admin") {
+        logger.warn(`Permission Denied: User role is ${myRole}, expected admin.`);
+        throw new HttpsError("permission-denied", "Apenas administradores podem convidar membros.");
+      }
       
-      logger.info(`Staff Profile Created in Firestore: UID=${targetUid}`);
-    } catch (fsErr: any) {
-      logger.error("Error setting claims or doc for staff:", fsErr);
-      throw new HttpsError("internal", "Usuário criado, mas houve erro ao definir permissões.");
-    }
+      if (!myRestaurantId) {
+        logger.warn(`Failed Precondition: Restaurant ID not found.`);
+        throw new HttpsError("failed-precondition", "Não foi possível identificar o seu restaurante.");
+      }
 
-    return { success: true, role, restaurant_id: myRestaurantId, targetUid };
+      const { role, name, email, password } = data; // role: waiter, kitchen, admin
+
+      if (!email || !password || !name || !role) {
+        throw new HttpsError("invalid-argument", "Todos os campos (nome, email, senha, cargo) são obrigatórios.");
+      }
+
+      // 2. Criar usuário no Auth via Admin SDK
+      let targetUser;
+      try {
+        targetUser = await admin.auth().createUser({
+          email: email,
+          password: password,
+          displayName: name,
+        });
+        logger.info(`User Created in Auth: UID=${targetUser.uid}, Email=${email}`);
+      } catch (authError: any) {
+        logger.error("Error creating user in Auth:", authError);
+        // Tratamento de erro amigável para e-mail já existente
+        if (authError.code === "auth/email-already-exists") {
+          throw new HttpsError("already-exists", "Este e-mail já está sendo usado por outro usuário.");
+        }
+        throw new HttpsError("internal", `Erro no Auth: ${authError.message}`);
+      }
+      const targetUid = targetUser.uid;
+
+      try {
+        // 3. Seta Custom Claims
+        await admin.auth().setCustomUserClaims(targetUid, {
+          restaurant_id: myRestaurantId,
+          role: role, 
+        });
+
+        // 4. Cria documento no Firestore
+        await db.collection("users").doc(targetUid).set({
+          uid: targetUid,
+          restaurant_id: myRestaurantId,
+          role: role,
+          name: name,
+          email: email,
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        
+        logger.info(`Staff Profile Created in Firestore: UID=${targetUid}`);
+      } catch (postAuthErr: any) {
+        logger.error(`Error configuring profile for ${targetUid}:`, postAuthErr);
+        throw new HttpsError("internal", `Usuário criado (${targetUid}), mas houve erro ao definir permissões: ${postAuthErr.message}`);
+      }
+
+      return { success: true, role, restaurant_id: myRestaurantId, targetUid };
+
+    } catch (globalErr: any) {
+       logger.error("Global Error in invite_staff:", globalErr);
+       // Se for um HttpsError, repassa
+       if (globalErr instanceof HttpsError) throw globalErr;
+       // Caso contrário, encapsula
+       throw new HttpsError("internal", `Erro crítico no servidor: ${globalErr.message}`);
+    }
   }
+
 
   throw new HttpsError("invalid-argument", "Action not understood");
 });
