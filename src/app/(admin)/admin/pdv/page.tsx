@@ -124,7 +124,7 @@ export default function PDVPage() {
       });
 
       setAlerts(newAlerts);
-    });
+    }, (err) => console.error("Firebase alerts error:", err));
 
     return () => unsub();
   }, [user?.restaurant_id]);
@@ -147,7 +147,7 @@ export default function PDVPage() {
     const unsub = onSnapshot(q, (snap) => {
       const total = snap.docs.reduce((acc, d) => acc + (d.data().amount_paid || 0), 0);
       setTodayTotal(total);
-    });
+    }, (err) => console.error("Firebase todayTotal error:", err));
 
     return () => unsub();
   }, [user?.restaurant_id]);
@@ -190,7 +190,7 @@ export default function PDVPage() {
 
     const unsub = onSnapshot(q, (snap) => {
       setClosedOrders(snap.docs.map(d => ({ id: d.id, ...d.data() } as Order)));
-    });
+    }, (err) => console.error("Firebase closedOrders error:", err));
 
     return () => unsub();
   }, [user?.restaurant_id]);
