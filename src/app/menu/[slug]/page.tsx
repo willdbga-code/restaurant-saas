@@ -570,29 +570,7 @@ function MenuContent({ slug }: { slug: string }) {
         )
       );
 
-      // ─── Fluxo de Pagamento ───
-      if (restaurant?.payment_linked && restaurant?.payment_provider === "infinitepay") {
-        try {
-          const { url } = await createCustomerCheckoutLink(
-            restaurant.id!,
-            orderRef.id,
-            totalCartValue, // Já está em centavos? (Preciso conferir se cart.price é em centavos)
-            {
-              name: customerName || "Cliente",
-              email: "checkout@saas.com", // Placeholder se oculto
-              phone_number: "00000000000"  // Placeholder se oculto
-            }
-          );
-          
-          if (url) {
-            window.location.href = url;
-            return;
-          }
-        } catch (payErr) {
-          console.error("Erro ao gerar link de pagamento:", payErr);
-          toast.error("Erro ao processar pagamento, mas seu pedido foi registrado.");
-        }
-      }
+      // Pagamento foi removido daqui para focar na rastreabilidade e só acionar API na hora H.
 
       setOrderNumber(orderNum);
       if (typeof window !== "undefined") {
@@ -856,6 +834,7 @@ function MenuContent({ slug }: { slug: string }) {
         isOpen={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         order={activeOrder}
+        restaurant={restaurant}
       />
 
       {/* Fullscreen Cart Overlay */}
