@@ -210,15 +210,6 @@ export default function TablesPage() {
                           <Button 
                             size="icon" 
                             variant="ghost" 
-                            title="Testar Mesa (Abrir Menu)"
-                            onClick={() => window.open(t.qr_target_url, "_blank")}
-                            className="h-8 w-8 text-orange-400 hover:text-orange-500 hover:bg-orange-500/10"
-                          >
-                            <ArrowRight className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
                             title="Ver QR Code"
                             onClick={() => setViewQr(t)}
                             className="h-8 w-8 text-blue-400 hover:text-blue-500 hover:bg-blue-500/10"
@@ -267,9 +258,6 @@ export default function TablesPage() {
                     <div className="flex gap-1">
                       <Button size="sm" variant="secondary" onClick={() => setViewQr(t)} className="h-9 px-3 rounded-xl bg-blue-500/10 text-blue-400 border-blue-500/10">
                         <QrCode className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => window.open(t.qr_target_url, "_blank")} className="h-9 px-3 rounded-xl bg-orange-500/10 text-orange-400 border-orange-500/10">
-                        <ArrowRight className="h-4 w-4" />
                       </Button>
                     </div>
                     <div className="flex gap-2">
