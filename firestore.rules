@@ -99,11 +99,8 @@ service cloud.firestore {
     // METADATA
     // --------------------------------------------------------------------------
     match /metadata/{restaurantId} {
-      allow read, write: if isAuthed() && (
-        isRestaurantOwner(restaurantId) || 
-        (isStaff() && (myRestaurantId() == restaurantId || isSuperAdmin())) ||
-        isSuperAdmin()
-      );
+      allow read: if isAuthed() && (restaurantId == 'system' || isRestaurantOwner(restaurantId) || (isStaff() && (myRestaurantId() == restaurantId || isSuperAdmin())) || isSuperAdmin());
+      allow write: if isAuthed() && (isRestaurantOwner(restaurantId) || isSuperAdmin());
 
       match /counters/{counterId} {
         allow read, write: if isAuthed() && (

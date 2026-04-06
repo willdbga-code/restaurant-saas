@@ -26,8 +26,12 @@ export function useNotifications(userId: string | undefined) {
       if (status === "granted") {
         // Obter o token FCM
         // Chave VAPID pública (Pegar do Console Firebase Cloud Messaging)
+        // Registrar o service worker manualmente para evitar timeout no Next.js
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        
         const token = await getToken(messaging, {
           vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+          serviceWorkerRegistration: registration,
         });
 
         if (token) {

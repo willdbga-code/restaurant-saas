@@ -41,7 +41,7 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
     // 0. Monitorar o próprio documento do Restaurante (para Planos)
     const unsubRest = onSnapshot(doc(db, "restaurants", restaurantId), (snap) => {
       setActiveRestaurant(snap.data());
-    });
+    }, (err) => console.warn("LiveMetrics: Rest error:", err));
 
     // 1. Monitorar Mesas
     const qTables = query(collection(db, "tables"), where("restaurant_id", "==", restaurantId));
@@ -49,7 +49,7 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
       const all = snap.docs.map(d => d.data() as Table);
       const occupied = all.filter(t => t.status === "occupied").length;
       setStats(prev => ({ ...prev, totalTables: all.length, occupiedTables: occupied }));
-    });
+    }, (err) => console.warn("LiveMetrics: Tables error:", err));
 
     // 2. Monitorar Pedidos Ativos e Financeiro
     const qOrders = query(
@@ -61,7 +61,7 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
       const all = snap.docs.map(d => d.data() as Order);
       const revenue = all.reduce((acc, curr) => acc + (curr.total || 0), 0);
       setStats(prev => ({ ...prev, activeOrdersCount: all.length, openRevenue: revenue }));
-    });
+    }, (err) => console.warn("LiveMetrics: Orders error:", err));
 
     // 2.1 Monitorar Pedidos Mensais (Total desde dia 1)
     const firstDay = new Date();
@@ -74,7 +74,7 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
     );
     const unsubMonthly = onSnapshot(qMonthly, (snap) => {
       setStats(prev => ({ ...prev, monthlyOrders: snap.size }));
-    });
+    }, (err) => console.warn("LiveMetrics: Monthly error:", err));
 
     // 3. Monitorar KDS (Carga da Cozinha)
     const qItems = query(
@@ -91,13 +91,13 @@ export function RestaurantLiveMetrics({ restaurantId }: { restaurantId: string }
         return (now - createdAt) > twentyMins;
       });
       setStats(prev => ({ ...prev, kdsPendingItems: all.length, hasBottleneck: bottleneck }));
-    });
+    }, (err) => console.warn("LiveMetrics: KDS error:", err));
 
     // 4. Monitorar Staff
     const qStaff = query(collection(db, "users"), where("restaurant_id", "==", restaurantId));
     const unsubStaff = onSnapshot(qStaff, (snap) => {
       setStats(prev => ({ ...prev, staffCount: snap.size }));
-    });
+    }, (err) => console.warn("LiveMetrics: Staff error:", err));
 
     return () => {
       unsubRest();

@@ -27,12 +27,15 @@ export default function SuperRestaurantsPage() {
       if (snap.exists()) {
         setPulseStats(snap.data());
       }
-    });
+    }, (err) => console.error("SuperDashboard: Pulse error:", err));
 
     // 2. Monitorar Lista de Restaurantes
     const q = query(collection(db, "restaurants"), orderBy("created_at", "desc"));
     const unsubList = onSnapshot(q, (snap) => {
       setRestaurants(snap.docs.map(d => ({ id: d.id, ...d.data() } as Restaurant)));
+      setLoading(false);
+    }, (err) => {
+      console.error("SuperDashboard: List error:", err);
       setLoading(false);
     });
 
