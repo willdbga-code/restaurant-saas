@@ -478,7 +478,7 @@ export default function PDVPage() {
                   </div>
                   
                   <p className="mt-4 text-[9px] text-zinc-600 uppercase font-bold tracking-widest">
-                     Fechado em: {order.updated_at?.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
+                     Fechado em: {order.updated_at?.toDate?.() ? order.updated_at.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' }) : "Agora"}
                   </p>
                 </div>
               ))

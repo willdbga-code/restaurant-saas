@@ -116,7 +116,7 @@ export function NotificationFeed({ restaurantId }: { restaurantId: string | unde
                       {n.type === "order_created" && ` enviou um novo pedido`}
                     </p>
                     <p className="text-[10px] text-zinc-600 mt-2 font-medium">
-                      {n.created_at ? n.created_at.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' }) : "Agora"}
+                      {n.created_at?.toDate?.() ? n.created_at.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' }) : "Agora"}
                     </p>
                   </div>
                 </div>

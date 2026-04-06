@@ -21,8 +21,14 @@ export function PaymentDrawer({ isOpen, onClose, order }: PaymentDrawerProps) {
   const [splitCount, setSplitCount] = useState(1);
   const [customAmount, setCustomAmount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [cachedOrder, setCachedOrder] = useState<Order | null>(order);
   
   const [notifiedSplit, setNotifiedSplit] = useState(false);
+
+  // Sync cache
+  useEffect(() => {
+    if (order) setCachedOrder(order);
+  }, [order]);
 
   // Sync state on open
   useEffect(() => {
@@ -58,9 +64,9 @@ export function PaymentDrawer({ isOpen, onClose, order }: PaymentDrawerProps) {
     }
   }, [splitCount, isOpen, notifiedSplit, order]);
 
-  if (!order) return null;
+  if (!cachedOrder) return null;
 
-  const orderData = order;
+  const orderData = cachedOrder;
   const remaining = orderData.total - (orderData.amount_paid || 0);
   const myPart = Math.ceil(remaining / splitCount);
 

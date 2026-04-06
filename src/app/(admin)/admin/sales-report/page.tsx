@@ -210,7 +210,7 @@ export default function SalesReport() {
           <div class="header">
             <h3>CUPOM DE VENDA</h3>
             <p>Pedido #${selectedOrder.order_number}</p>
-            <p>${selectedOrder.created_at?.toDate().toLocaleString("pt-BR")}</p>
+            <p>${selectedOrder.created_at?.toDate?.() ? selectedOrder.created_at.toDate().toLocaleString("pt-BR") : ""}</p>
             <p>Mesa: ${selectedOrder.table_label || "Balcão"}</p>
           </div>
 
@@ -371,7 +371,7 @@ export default function SalesReport() {
                     <td className="px-6 py-4 text-sm font-bold text-white">{order.table_label || "Balcão"}</td>
                     <td className="px-6 py-4 text-sm font-mono text-zinc-400">#{order.order_number}</td>
                     <td className="px-6 py-4 text-xs text-zinc-500">
-                      {order.created_at?.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
+                      {order.created_at?.toDate?.() ? order.created_at.toDate().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' }) : ""}
                     </td>
                     <td className="px-6 py-4">
                       <span className={cn(
@@ -468,7 +468,7 @@ export default function SalesReport() {
                 </div>
                 <div className="bg-zinc-900/50 p-4 rounded-3xl border border-white/5 space-y-1">
                   <p className="text-[10px] font-black uppercase text-zinc-600 tracking-widest flex items-center gap-1.5"><Clock className="h-3 w-3" /> Abertura</p>
-                  <p className="text-lg font-bold">{selectedOrder?.created_at?.toDate().toLocaleTimeString("pt-BR")}</p>
+                  <p className="text-lg font-bold">{selectedOrder?.created_at?.toDate?.() ? selectedOrder.created_at.toDate().toLocaleTimeString("pt-BR") : ""}</p>
                 </div>
               </div>
 
