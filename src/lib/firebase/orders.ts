@@ -56,6 +56,7 @@ export type OrderItem = {
   total_price: number;
   notes: string | null;
   status: OrderItemStatus;
+  customer_name?: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 };
@@ -147,6 +148,7 @@ export const addOrderItem = async (p: {
   restaurantId: string; orderId: string; orderNumber: number;
   tableLabel: string | null; product: Product; categoryName: string;
   quantity: number; notes: string | null; address?: string | null;
+  customerName?: string | null;
 }) => {
   const orderRef = doc(db, "orders", p.orderId);
   const productRef = doc(db, "products", p.product.id);
@@ -192,6 +194,7 @@ export const addOrderItem = async (p: {
       notes: p.notes,
       address: p.address || null,
       status: "pending",
+      customer_name: p.customerName || null,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),
     });

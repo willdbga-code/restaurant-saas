@@ -562,8 +562,9 @@ function MenuContent({ slug }: { slug: string }) {
           addOrderItem({
             restaurantId: restaurant!.id!,
             orderId: currentOrderId!,
-            orderNumber: currentOrderNumber!,
+            orderNumber: currentOrderNumber || 0,
             tableLabel: tableLabel ?? (orderType === "delivery" ? "Delivery" : "Balcão"),
+            customerName: customerName || null,
             product: {
               id: item.productId,
               product_id: item.product_id,

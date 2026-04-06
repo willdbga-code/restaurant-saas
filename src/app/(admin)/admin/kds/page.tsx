@@ -5,12 +5,14 @@ import { useAuth } from "@/context/AuthContext";
 import { useKDSItems } from "@/hooks/useKDSItems";
 import { useRestaurant } from "@/hooks/useRestaurant";
 import { playNotificationSound } from "@/lib/utils/sound";
-import { updateOrderItemStatus, approveItemCancellation, rejectItemCancellation } from "@/lib/firebase/orders";
+import { updateOrderItemStatus, approveItemCancellation, rejectItemCancellation, forceCancelItem } from "@/lib/firebase/orders";
 import type { OrderItem, OrderItemStatus } from "@/lib/firebase/orders";
-import { Loader2, ChefHat, Clock, Bell, CheckCheck, Utensils, Wifi, Printer, MapPin, XCircle, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, ChefHat, Clock, Bell, CheckCheck, Utensils, Wifi, Printer, MapPin, XCircle, CheckCircle2, AlertCircle, Trash2, Download } from "lucide-react";
 import { ThermalReceipt } from "@/components/admin/kds/ThermalReceipt";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function elapsed(ts: OrderItem["created_at"] | null): string {
@@ -137,6 +139,21 @@ function KDSCard({
     }
   }
 
+  async function handleForceCancel() {
+    if (!item.restaurant_id) return;
+    if (!confirm("Tem certeza que deseja cancelar este item? O valor será estornado do subtotal da mesa.")) return;
+    
+    setLoading(true);
+    try {
+      await forceCancelItem(item.id, item.order_id, item.restaurant_id);
+      toast.success("Item cancelado com sucesso pela cozinha.");
+    } catch {
+      toast.error("Erro ao cancelar item.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -163,13 +180,23 @@ function KDSCard({
             <Clock className="h-3 w-3" />
             <span>{elapsed(item.created_at)}</span>
           </div>
-          <button 
-             onClick={(e) => { e.stopPropagation(); handlePrint(); }}
-             className="p-1.5 rounded-md bg-zinc-800 text-zinc-400 hover:text-white transition-opacity md:opacity-0 group-hover:opacity-100"
-             title="Imprimir Comanda"
-           >
-             <Printer className="h-3.5 w-3.5" />
-           </button>
+          <div className="flex gap-2 items-center">
+            <button 
+               onClick={(e) => { e.stopPropagation(); handlePrint(); }}
+               className="p-1.5 rounded-md bg-zinc-800 text-zinc-400 hover:text-white transition-opacity md:opacity-0 group-hover:opacity-100"
+               title="Imprimir Comanda"
+             >
+               <Printer className="h-3.5 w-3.5" />
+            </button>
+            <button 
+               onClick={(e) => { e.stopPropagation(); handleForceCancel(); }}
+               disabled={loading}
+               className="p-1.5 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all md:opacity-0 group-hover:opacity-100"
+               title="Cancelar Item Diretamente"
+             >
+               <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -190,6 +217,11 @@ function KDSCard({
         <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs font-bold text-orange-400">
           ×{item.quantity}
         </span>
+        {item.customer_name && (
+          <span className="rounded-md bg-purple-500/10 px-2 py-0.5 text-xs font-bold text-purple-400 border border-purple-500/20">
+            {item.customer_name.split(' ')[0]}
+          </span>
+        )}
       </div>
 
       {/* Notes */}
@@ -328,6 +360,65 @@ export default function KDSPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExportDayWork() {
+    if (!user?.restaurant_id) return;
+    setExporting(true);
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const q = query(
+        collection(db, "order_items"),
+        where("restaurant_id", "==", user.restaurant_id),
+        where("created_at", ">=", Timestamp.fromDate(startOfDay))
+      );
+
+      const snap = await getDocs(q);
+      const items = snap.docs.map(d => d.data() as OrderItem);
+
+      if (items.length === 0) {
+        toast.info("Nenhum item processado hoje.");
+        return;
+      }
+
+      const rows = [
+        ["Data/Hora", "Mesa", "Cliente", "Produto", "Categoria", "Qtd", "Total", "Status"].join(",")
+      ];
+
+      items.forEach(item => {
+        const row = [
+          item.created_at?.toDate().toLocaleString("pt-BR") || "",
+          item.table_label || "Balcão",
+          item.customer_name || "Cliente",
+          `"${item.product_name}"`,
+          item.category_name || "",
+          item.quantity,
+          (item.total_price / 100).toFixed(2),
+          item.status
+        ];
+        rows.push(row.join(","));
+      });
+
+      const csvContent = "data:text/csv;charset=utf-8," + rows.join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `relatorio-cozinha-${new Date().toISOString().split("T")[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Relatório gerado com sucesso.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao exportar relatório.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const totalActive = pending.length + preparing.length + ready.length;
 
   return (
@@ -364,6 +455,18 @@ export default function KDSPage() {
           <div className="rounded-lg bg-zinc-900 px-3 py-1.5 font-mono text-sm text-zinc-300">
             {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </div>
+
+          <div className="h-6 w-px bg-zinc-800 mx-1" />
+
+          {/* Export Report CSV */}
+          <button
+            onClick={handleExportDayWork}
+            disabled={exporting}
+            className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Baixar Relatório (CSV)
+          </button>
         </div>
       </header>
 
