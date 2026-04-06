@@ -331,7 +331,7 @@ export default function PDVPage() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {tables.map((table: Table) => {
-            const cfg = STATUS_CFG[table.status];
+            const cfg = STATUS_CFG[table.status] || STATUS_CFG.available;
             const order = activeOrders[table.id];
 
             return (
@@ -361,7 +361,7 @@ export default function PDVPage() {
                   <div className="mt-4 flex flex-col items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500">
                     <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.1em]">Total</span>
                     <span className="text-lg font-black text-white tabular-nums">
-                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total / 100)}
+                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((order.total || 0) / 100)}
                     </span>
                   </div>
                 ) : (
@@ -449,7 +449,7 @@ export default function PDVPage() {
                     <div className="flex flex-col">
                        <span className="text-[10px] uppercase font-bold text-zinc-600">Total Pago</span>
                        <span className="text-lg font-black text-white">
-                         {(order.amount_paid / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                         {((order.amount_paid || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                        </span>
                     </div>
                     

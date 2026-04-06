@@ -88,7 +88,7 @@ export function NotificationFeed({ restaurantId }: { restaurantId: string | unde
             </div>
           ) : (
             notifications.map((n) => {
-              const cfg = NOTIF_CONFIG[n.type];
+              const cfg = NOTIF_CONFIG[n.type] || NOTIF_CONFIG.order_created;
               const Icon = cfg.icon;
               return (
                 <div 
