@@ -144,7 +144,8 @@ service cloud.firestore {
       allow read: if true;
       allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
 
-      allow update: if (isStaff()) && (resourceIsMyRestaurant() || isSuperAdmin());
+      allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) || 
+                      (isAuthed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'current_order_id', 'updated_at']));
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 

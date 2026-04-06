@@ -140,6 +140,16 @@ export const createOrder = async (p: {
       closed_at: null,
     });
 
+    // ─── NOVO: Vincula o pedido à mesa atomicamente ───
+    if (p.tableId && p.tableId !== "balcao") {
+      const tableRef = doc(db, "tables", p.tableId);
+      transaction.update(tableRef, {
+        status: "occupied",
+        current_order_id: newOrderRef.id,
+        updated_at: serverTimestamp()
+      });
+    }
+
     return newOrderRef;
   });
 };
