@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import type { Notification } from "@/lib/firebase/orders";
 
 function fmt(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return ((cents || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export function NotificationFeed({ restaurantId }: { restaurantId: string | undefined }) {

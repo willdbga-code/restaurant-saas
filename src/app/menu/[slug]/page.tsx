@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { ThemeInjector } from "@/components/menu/ThemeInjector";
 
 function fmt(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return ((cents || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 type CartItem = {

@@ -41,7 +41,7 @@ import { toast } from "sonner";
 
 
 function fmt(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return ((cents || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 const STATUS_BADGE: Record<Order["status"], { label: string; cls: string }> = {

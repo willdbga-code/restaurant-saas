@@ -14,7 +14,7 @@ interface OrderDetailsDrawerProps {
 }
 
 function fmt(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return ((cents || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export function OrderDetailsDrawer({ isOpen, onClose, onOpenPayment, order, items, derivedStatus }: OrderDetailsDrawerProps) {

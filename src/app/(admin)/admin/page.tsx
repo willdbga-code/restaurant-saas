@@ -7,7 +7,7 @@ import { ChefHat, ShoppingBag, Banknote, Tag, Loader2, ArrowUpRight } from "luci
 import { cn } from "@/lib/utils";
 
 function fmt(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return ((cents || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export default function AdminDashboard() {
