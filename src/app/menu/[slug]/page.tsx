@@ -536,23 +536,33 @@ function MenuContent({ slug }: { slug: string }) {
     if (!restaurant || cart.length === 0) return;
     setSubmitting(true);
     try {
-      const orderRef = await createOrder({
-        restaurantId: restaurant.id!,
-        tableId: tableId ?? "balcao",
-        tableLabel: tableLabel ?? (orderType === "delivery" ? "Delivery" : "Balcão"),
-        waiterUid: "customer",
-        waiterName: customerName || "Cliente",
-        type: orderType,
-        address: orderType === "delivery" ? address : null,
-      });
-      const orderNum = Math.floor(Date.now() / 1000) % 10000;
+      
+      let currentOrderId = activeOrder?.id;
+      let currentOrderNumber = activeOrder?.order_number;
+
+      // Se não for mesa real (delivery, takeaway, balcão genérico), força a criar NOVO pedido sempre.
+      const isDineInTable = orderType === "dine_in" && tableId && tableId !== "balcao";
+
+      if (!isDineInTable || !currentOrderId) {
+        const orderRef = await createOrder({
+          restaurantId: restaurant.id!,
+          tableId: tableId ?? "balcao",
+          tableLabel: tableLabel ?? (orderType === "delivery" ? "Delivery" : "Balcão"),
+          waiterUid: "customer",
+          waiterName: customerName || "Cliente",
+          type: orderType,
+          address: orderType === "delivery" ? address : null,
+        });
+        currentOrderId = orderRef.id;
+        currentOrderNumber = Math.floor(Date.now() / 1000) % 10000;
+      }
 
       await Promise.all(
         cart.map(item =>
           addOrderItem({
             restaurantId: restaurant!.id!,
-            orderId: orderRef.id,
-            orderNumber: orderNum,
+            orderId: currentOrderId!,
+            orderNumber: currentOrderNumber!,
             tableLabel: tableLabel ?? (orderType === "delivery" ? "Delivery" : "Balcão"),
             product: {
               id: item.productId,
@@ -572,9 +582,9 @@ function MenuContent({ slug }: { slug: string }) {
 
       // Pagamento foi removido daqui para focar na rastreabilidade e só acionar API na hora H.
 
-      setOrderNumber(orderNum);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`last_order_id_${restaurant?.id}`, orderRef.id);
+      setOrderNumber(currentOrderNumber || null);
+      if (typeof window !== "undefined" && currentOrderId) {
+        localStorage.setItem(`last_order_id_${restaurant?.id}`, currentOrderId);
       }
       setCart([]);
       setCartOpen(false);
