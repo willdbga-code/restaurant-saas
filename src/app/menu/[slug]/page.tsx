@@ -332,6 +332,8 @@ function MenuContent({ slug }: { slug: string }) {
 
   const [orderNumber, setOrderNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [isConcessionActive, setIsConcessionActive] = useState(false);
 
   const { order: activeOrder, items: orderItems, derivedStatus } = useActiveOrder(restaurant?.id, tableId ?? "balcao");
   const [customerName, setCustomerName] = useState("");
@@ -487,6 +489,7 @@ function MenuContent({ slug }: { slug: string }) {
       // Isso deve ser feito pelo ADM após receber a notificação acima.
       
       toast.success("Solicitação enviada! Um garçom virá até você.");
+      setRequestSent(true);
     } catch (err) {
       console.error("Erro ao solicitar abertura:", err);
       toast.error("Erro ao enviar solicitação. Por favor, chame um garçom.");
@@ -592,7 +595,8 @@ function MenuContent({ slug }: { slug: string }) {
       setStatus("success");
     } catch (err: any) {
       console.error(err);
-      toast.error("Erro ao enviar pedido.");
+      const msg = err?.message || "Erro ao enviar pedido.";
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -618,38 +622,59 @@ function MenuContent({ slug }: { slug: string }) {
     );
   }
 
-  if (status === "locked" && !activeOrder) {
+  if (status === "locked" && !activeOrder && !isConcessionActive) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-8 text-center bg-zinc-950 text-white font-outfit">
         <ThemeInjector color={restaurant?.branding?.primary_color} />
         <div className="mb-10 relative">
           <div className="h-32 w-32 rounded-[2.5rem] bg-primary-theme/10 flex items-center justify-center border border-primary-theme/20 shadow-2xl">
-             <Lock className="h-16 w-16 text-primary-theme animate-pulse" />
+             {requestSent ? (
+               <Sparkles className="h-16 w-16 text-primary-theme animate-pulse" />
+             ) : (
+               <Lock className="h-16 w-16 text-primary-theme animate-pulse" />
+             )}
           </div>
           <div className="absolute -bottom-2 -right-2 h-10 w-10 bg-zinc-950 rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl">
              <UtensilsCrossed className="h-5 w-5 text-zinc-500" />
           </div>
         </div>
         
-        <h1 className="text-4xl font-black text-white leading-tight tracking-tighter mb-4">Mesa Bloqueada</h1>
+        <h1 className="text-4xl font-black text-white leading-tight tracking-tighter mb-4">
+          {requestSent ? "Mesa em Abertura" : "Mesa Bloqueada"}
+        </h1>
         <p className="text-zinc-500 text-lg font-medium leading-relaxed max-w-xs mb-8">
-          Esta mesa ({tableLabel}) ainda não foi aberta. <br/>
-          <span className="text-primary-theme font-bold">Solicite a abertura para fazer o seu pedido.</span>
+          {requestSent 
+            ? "Sua solicitação foi enviada! O garçom já está vindo para liberar sua mesa." 
+            : `Esta mesa (${tableLabel}) ainda não foi aberta.`}
+          <br/>
+          {!requestSent && <span className="text-primary-theme font-bold">Solicite a abertura para fazer o seu pedido.</span>}
         </p>
 
         <div className="w-full max-w-xs space-y-4">
-          <button 
-            onClick={handleRequestOpen}
-            disabled={submitting}
-            className="w-full bg-primary-theme text-white rounded-3xl py-6 font-black text-xl shadow-2xl shadow-primary-theme/20 active:scale-95 transition-all flex items-center justify-center gap-3"
-          >
-            {submitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <ChefHat className="h-6 w-6" />}
-            Solicitar Abertura
-          </button>
+          {!requestSent ? (
+            <button 
+              onClick={handleRequestOpen}
+              disabled={submitting}
+              className="w-full bg-primary-theme text-white rounded-3xl py-6 font-black text-xl shadow-2xl shadow-primary-theme/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+            >
+              {submitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <ChefHat className="h-6 w-6" />}
+              Solicitar Abertura
+            </button>
+          ) : (
+            <button 
+              onClick={() => setIsConcessionActive(true)}
+              className="w-full bg-primary-theme text-white rounded-3xl py-6 font-black text-xl shadow-2xl shadow-primary-theme/20 active:scale-95 transition-all flex items-center justify-center gap-3 animate-in zoom-in duration-500"
+            >
+              <Sparkles className="h-6 w-6" />
+              Explorar Cardápio
+            </button>
+          )}
 
           <div className="p-6 glass-morphism rounded-3xl w-full border border-white/5 shadow-2xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 mb-2">Segurança de Acesso</p>
-            <p className="text-sm font-bold text-white uppercase italic">Liberação exclusiva pelo garçom</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 mb-2">Ponte com a Cozinha</p>
+            <p className="text-sm font-bold text-white uppercase italic">
+              {requestSent ? "Conexão estabelecida" : "Liberação exclusiva pelo garçom"}
+            </p>
           </div>
         </div>
       </div>
@@ -669,10 +694,17 @@ function MenuContent({ slug }: { slug: string }) {
       {/* 1. Sucesso do Pedido (Overlay Temporário) */}
       {status === "success" && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-8 text-center bg-zinc-950 text-white animate-in fade-in duration-500">
-           <div className="mb-8 rounded-full h-24 w-24 bg-green-500 flex items-center justify-center shadow-[0_0_50px_rgba(34,197,94,0.3)]">
-            <Check className="h-12 w-12 text-white" />
-          </div>
+           <div className="mb-8 relative">
+              <div className="rounded-full h-24 w-24 bg-green-500 flex items-center justify-center shadow-[0_0_50px_rgba(34,197,94,0.3)]">
+                <Check className="h-12 w-12 text-white" />
+              </div>
+              <div className="absolute -top-2 -right-2 bg-primary-theme p-2 rounded-full animate-bounce shadow-xl">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+           </div>
           <h1 className="text-4xl font-black text-white leading-tight tracking-tight">Pedido na<br/>Cozinha!</h1>
+          <p className="mt-4 text-zinc-500 font-medium">Ponte invisível estabelecida.</p>
+          
           {orderNumber && (
             <div className="mt-8 p-6 glass-morphism rounded-3xl w-full max-w-xs border border-white/5 shadow-2xl">
               <p className="text-zinc-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Sua Senha</p>
@@ -683,7 +715,7 @@ function MenuContent({ slug }: { slug: string }) {
             onClick={() => setStatus("ready")}
             className="mt-12 w-full max-w-xs bg-white text-black py-5 rounded-3xl font-black text-lg transition-transform active:scale-95 shadow-2xl"
           >
-            Fazer outro pedido
+            Acompanhar Pedido
           </button>
         </div>
       )}
@@ -700,7 +732,7 @@ function MenuContent({ slug }: { slug: string }) {
       )}
 
       {/* 3. Cardápio / Feed Principal */}
-      {( (!showLanding && status === "ready") || (status === "success") || (activeOrder) ) && (
+      {( (!showLanding && status === "ready") || (status === "success") || (activeOrder) || (isConcessionActive) ) && (
         <>
           {/* Mini-Header for Branding */}
           <div className="p-8 pb-4 flex items-center justify-between">
