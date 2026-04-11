@@ -22,9 +22,9 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     }
 
     // Bloqueio de Assinatura Inativa
-    // Se o restaurante estiver inativo e não estiver na página de cobrança, redireciona.
+    // Se o restaurante estiver inativo (ou ausente) e não estiver na página de cobrança, redireciona.
     // Super Admins e o próprio processo de carregamento inicial do restaurante não devem barrar.
-    if (!authLoading && !resLoading && user && !isSuperAdmin && restaurant && !restaurant.is_active && !isBillingPage) {
+    if (!authLoading && !resLoading && user && !isSuperAdmin && (!restaurant || !restaurant.is_active) && !isBillingPage) {
       router.push("/admin/billing");
     }
   }, [user, authLoading, resLoading, restaurant, router, isBillingPage, isSuperAdmin]);
@@ -58,8 +58,8 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Se o restaurante estiver inativo, só permite ver a página de Billing
-  if (!restaurant?.is_active && !isBillingPage) {
+  // Se o restaurante estiver inativo (ou não existir), só permite ver a página de Billing
+  if ((!restaurant || !restaurant.is_active) && !isBillingPage) {
     return null; // O useEffect vai cuidar do redirect
   }
 

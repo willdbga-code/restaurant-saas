@@ -60,9 +60,9 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      // Staff real: membros com roles definidas. Clientes anônimos NÃO são staff.
-      // Eles recebem apenas as permissões explícitas de que precisam.
-      return isSuperAdmin() || isAdmin() || isWaiter() || isKitchen() || isBar();
+      // Staff real: membros com roles definidas, ou donos de restaurante que perderam a claim.
+      // Clientes anônimos NÃO são staff.
+      return isSuperAdmin() || isAdmin() || isWaiter() || isKitchen() || isBar() || isRestaurantOwner(myRestaurantId());
     }
 
     function isCustomerUser() {
