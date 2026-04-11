@@ -34,13 +34,13 @@ export function SidebarContent() {
   const nav = [...baseNav];
 
   // Insere KDS Cozinha logo após PDV para admin e kitchen
-  if (role === "admin" || role === "kitchen") {
+  if (role === "superadmin" || role === "admin" || role === "kitchen") {
     const pdvIdx = nav.findIndex((n) => n.href === "/admin/pdv");
     nav.splice(pdvIdx + 1, 0, { href: "/admin/kds", label: "KDS — Cozinha", icon: UtensilsCrossed, exact: false } as any);
   }
 
   // Insere KDS Bar logo após KDS Cozinha (ou PDV se cozinha não estiver) para admin e bar
-  if (role === "admin" || role === "bar") {
+  if (role === "superadmin" || role === "admin" || role === "bar") {
     const kdsIdx = nav.findIndex((n) => n.href === "/admin/kds");
     const insertAfter = kdsIdx >= 0 ? kdsIdx : nav.findIndex((n) => n.href === "/admin/pdv");
     nav.splice(insertAfter + 1, 0, { href: "/admin/bar", label: "KDS — Bar 🍸", icon: GlassWater, exact: false } as any);
