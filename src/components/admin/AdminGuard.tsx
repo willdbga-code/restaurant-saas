@@ -59,7 +59,8 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   }
 
   // Se o restaurante estiver inativo (ou não existir), só permite ver a página de Billing
-  if ((!restaurant || !restaurant.is_active) && !isBillingPage) {
+  // Se for Super Admin, libera o acesso mesmo se não tiver restaurante associado ativo.
+  if (!isSuperAdmin && (!restaurant || !restaurant.is_active) && !isBillingPage) {
     return null; // O useEffect vai cuidar do redirect
   }
 
