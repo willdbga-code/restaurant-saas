@@ -12,7 +12,7 @@ type AuthUser = {
   name: string;
   email: string | null;
   restaurant_id: string;
-  role: "admin" | "waiter" | "kitchen" | "customer" | "superadmin";
+  role: "admin" | "waiter" | "kitchen" | "bar" | "customer" | "superadmin";
 };
 
 type AuthContextType = {

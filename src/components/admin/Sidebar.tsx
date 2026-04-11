@@ -2,21 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Tag, ShoppingBag, TableProperties, ChefHat, LogOut, MonitorCheck, UtensilsCrossed, Settings, Users, Palette, ShieldCheck, BarChart3 } from "lucide-react";
+import { LayoutGrid, Tag, ShoppingBag, TableProperties, ChefHat, LogOut, MonitorCheck, UtensilsCrossed, Settings, Users, Palette, ShieldCheck, BarChart3, GlassWater } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
-const nav = [
-  { href: "/admin", label: "Dashboard", icon: LayoutGrid, exact: true },
-  { href: "/admin/pdv", label: "PDV", icon: MonitorCheck },
-  { href: "/admin/kds", label: "KDS — Cozinha", icon: UtensilsCrossed },
-  { href: "/admin/categories", label: "Categorias", icon: Tag },
-  { href: "/admin/products", label: "Produtos", icon: ShoppingBag },
-  { href: "/admin/branding", label: "Identidade Visual", icon: Palette },
-  { href: "/admin/tables", label: "Mesas", icon: TableProperties },
-  { href: "/admin/staff", label: "Equipe", icon: Users },
-  { href: "/admin/settings", label: "Configurações", icon: Settings },
-  { href: "/admin/billing", label: "Assinatura", icon: ShoppingBag },
+// Links base — visíveis para todos os roles com acesso ao painel
+const baseNav = [
+  { href: "/admin",              label: "Dashboard",        icon: LayoutGrid,       exact: true },
+  { href: "/admin/pdv",          label: "PDV",              icon: MonitorCheck },
+  { href: "/admin/categories",   label: "Categorias",       icon: Tag },
+  { href: "/admin/products",     label: "Produtos",         icon: ShoppingBag },
+  { href: "/admin/branding",     label: "Identidade Visual", icon: Palette },
+  { href: "/admin/tables",       label: "Mesas",            icon: TableProperties },
+  { href: "/admin/staff",        label: "Equipe",           icon: Users },
+  { href: "/admin/settings",     label: "Configurações",    icon: Settings },
+  { href: "/admin/billing",      label: "Assinatura",       icon: ShoppingBag },
   { href: "/admin/sales-report", label: "Relatório de Vendas", icon: BarChart3 },
 ];
 
@@ -28,6 +28,24 @@ export function SidebarContent() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { permission, requestPermission } = useNotifications(user?.uid);
+
+  // Monta a nav dinamicamente por role
+  const role = user?.role;
+  const nav = [...baseNav];
+
+  // Insere KDS Cozinha logo após PDV para admin e kitchen
+  if (role === "admin" || role === "kitchen") {
+    const pdvIdx = nav.findIndex((n) => n.href === "/admin/pdv");
+    nav.splice(pdvIdx + 1, 0, { href: "/admin/kds", label: "KDS — Cozinha", icon: UtensilsCrossed, exact: false } as any);
+  }
+
+  // Insere KDS Bar logo após KDS Cozinha (ou PDV se cozinha não estiver) para admin e bar
+  if (role === "admin" || role === "bar") {
+    const kdsIdx = nav.findIndex((n) => n.href === "/admin/kds");
+    const insertAfter = kdsIdx >= 0 ? kdsIdx : nav.findIndex((n) => n.href === "/admin/pdv");
+    nav.splice(insertAfter + 1, 0, { href: "/admin/bar", label: "KDS — Bar 🍸", icon: GlassWater, exact: false } as any);
+  }
+
 
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-white">

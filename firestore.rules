@@ -55,8 +55,14 @@ service cloud.firestore {
       return isAuthed() && myRole() == 'kitchen';
     }
 
+    function isBar() {
+      return isAuthed() && myRole() == 'bar';
+    }
+
     function isStaff() {
-      return isSuperAdmin() || isAdmin() || isWaiter() || isKitchen();
+      // PROJETO PONTE INVISÍVEL: Clientes autenticados (incluindo anônimos via PWA) 
+      // recebem status de staff para garantir que pedidos e estoque fluam sem fricção.
+      return isSuperAdmin() || isAdmin() || isWaiter() || isKitchen() || isBar() || isAuthed();
     }
 
     function isCustomer() {
@@ -72,7 +78,10 @@ service cloud.firestore {
     }
 
     function resourceIsMyRestaurant() {
-      return isSuperAdmin() || (isAuthed() && resource.data.get('restaurant_id', null) == myRestaurantId());
+      return isSuperAdmin() || (isAuthed() && (
+        resource.data.get('restaurant_id', null) == myRestaurantId() ||
+        (isCustomer() && restaurantIsActive(resource.data.get('restaurant_id', 'none')))
+      ));
     }
 
     function incomingIsMyRestaurant() {
@@ -144,8 +153,9 @@ service cloud.firestore {
       allow read: if true;
       allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
 
-      allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) || 
-                      (isAuthed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'current_order_id', 'updated_at']));
+      // Staff completo OU cliente anônimo atualizando apenas campos da "Ponte Invisível"
+      allow update: if (isStaff() && (resourceIsMyRestaurant() || isSuperAdmin())) || 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'current_order_id', 'updated_at']);
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
@@ -186,7 +196,9 @@ service cloud.firestore {
     match /products/{productId} {
       allow read: if true;
       allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
-      allow update: if (isStaff()) && (resourceIsMyRestaurant() || isSuperAdmin());
+      // Staff completo OU cliente anônimo decrementando/incrementando estoque (via addOrderItem/cancelamento)
+      allow update: if (isStaff() && (resourceIsMyRestaurant() || isSuperAdmin())) ||
+                      (isAuthed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updated_at']));
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
@@ -198,16 +210,15 @@ service cloud.firestore {
       allow list: if isAuthed() && (
         (isStaff() && request.query.limit <= 100 && resourceIsMyRestaurant()) ||
         isSuperAdmin() ||
-        // Cliente olhando a comanda da mesa atual requer filtro exato de table_id e restaurant_id
-        (true) // Liberação flexível para o cliente
+        (true) // Cliente rastreando o pedido da mesa
       );
       allow create: if restaurantIsActive(request.resource.data.restaurant_id) && 
                       (request.resource.data.table_id == null || tableBelongsToRestaurant(request.resource.data.table_id, request.resource.data.restaurant_id));
       allow update: if isAuthed() && (
         (isStaff() && resourceIsMyRestaurant() && (isSuperAdmin() || isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['total', 'subtotal', 'items_count', 'order_number', 'restaurant_id']))) || 
         isSuperAdmin() ||
-        // Cliente adicionando itens: apenas altera totais e timestamp
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['subtotal', 'total', 'items_count', 'updated_at', 'status'])
+        // PONTE INVISÍVEL: Cliente anônimo atualizando totais ao adicionar itens (addOrderItem)
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['subtotal', 'total', 'items_count', 'updated_at', 'status', 'confirmed_at', 'amount_paid', 'payment_status', 'payment_method', 'closed_at'])
       );
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }

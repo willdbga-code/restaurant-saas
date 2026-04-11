@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useKDSItems } from "@/hooks/useKDSItems";
+import { useBarItems } from "@/hooks/useBarItems";
 import { useRestaurant } from "@/hooks/useRestaurant";
 import { playNotificationSound } from "@/lib/utils/sound";
 import { updateOrderItemStatus, approveItemCancellation, rejectItemCancellation, forceCancelItem } from "@/lib/firebase/orders";
 import type { OrderItem, OrderItemStatus } from "@/lib/firebase/orders";
-import { Loader2, ChefHat, Clock, Bell, CheckCheck, Utensils, Wifi, Printer, MapPin, XCircle, CheckCircle2, AlertCircle, Trash2, Download } from "lucide-react";
-import { ThermalReceipt } from "@/components/admin/kds/ThermalReceipt";
+import { Loader2, Clock, Bell, CheckCheck, Wifi, Printer, MapPin, XCircle, CheckCircle2, AlertCircle, Trash2, Download, GlassWater } from "lucide-react";
 import { OrderComandaModal } from "@/components/admin/kds/OrderComandaModal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -40,7 +39,7 @@ function timerColor(ts: OrderItem["created_at"] | null): string {
   return "text-zinc-400";
 }
 
-// ─── Column config ────────────────────────────────────────────────────────────
+// ─── Column config (Bar theme: indigo) ────────────────────────────────────────
 const COLUMNS: {
   status: OrderItemStatus;
   label: string;
@@ -52,27 +51,27 @@ const COLUMNS: {
 }[] = [
   {
     status: "pending",
-    label: "Novos Pedidos",
+    label: "Novos Drinks",
     icon: Bell,
-    headerBg: "bg-red-500/10 border-red-500/30",
+    headerBg: "bg-indigo-500/10 border-indigo-500/30",
     nextStatus: "preparing",
     nextLabel: "Iniciar Preparo",
-    nextBtnCls: "bg-orange-500 hover:bg-orange-600 text-white",
+    nextBtnCls: "bg-violet-500 hover:bg-violet-600 text-white",
   },
   {
     status: "preparing",
     label: "Preparando",
-    icon: Utensils,
-    headerBg: "bg-orange-500/10 border-orange-500/30",
+    icon: GlassWater,
+    headerBg: "bg-violet-500/10 border-violet-500/30",
     nextStatus: "ready",
     nextLabel: "Marcar Pronto",
-    nextBtnCls: "bg-green-600 hover:bg-green-700 text-white",
+    nextBtnCls: "bg-emerald-600 hover:bg-emerald-700 text-white",
   },
   {
     status: "ready",
     label: "Prontos para Servir",
     icon: CheckCheck,
-    headerBg: "bg-green-500/10 border-green-500/30",
+    headerBg: "bg-emerald-500/10 border-emerald-500/30",
     nextStatus: "delivered",
     nextLabel: "Confirmar Entrega",
     nextBtnCls: "bg-zinc-600 hover:bg-zinc-700 text-white",
@@ -80,29 +79,28 @@ const COLUMNS: {
 ];
 
 // ─── Item Card ────────────────────────────────────────────────────────────────
-function KDSCard({
+function BarCard({
   item,
   nextStatus,
   nextLabel,
   nextBtnCls,
   tick,
-  restaurantName,
 }: {
   item: OrderItem;
   nextStatus: OrderItemStatus;
   nextLabel: string;
   nextBtnCls: string;
   tick: number;
-  restaurantName: string | null;
 }) {
   const [loading, setLoading] = useState(false);
+  void tick;
 
   async function advance() {
     setLoading(true);
     try {
       if (!item.restaurant_id) throw new Error("Missing restaurant_id");
       await updateOrderItemStatus(item.restaurant_id, item.id, nextStatus, item.order_id);
-      if (nextStatus === "ready") toast.success(`"${item.product_name}" está pronto!`);
+      if (nextStatus === "ready") toast.success(`"${item.product_name}" pronto!`);
     } catch {
       toast.error("Erro ao atualizar item.");
     } finally {
@@ -110,17 +108,19 @@ function KDSCard({
     }
   }
 
-  // tick is just used to force re-render for elapsed time
-  void tick;
-
-  function handlePrint() {
-    const event = new CustomEvent("print-kds-item", { detail: item });
-    window.dispatchEvent(event);
-    // Timeout to ensure state updates before print dialog
-    setTimeout(() => window.print(), 350);
+  async function handleForceCancel() {
+    if (!item.restaurant_id) return;
+    if (!confirm("Cancelar este item? O valor será estornado.")) return;
+    setLoading(true);
+    try {
+      await forceCancelItem(item.id, item.order_id, item.restaurant_id);
+      toast.success("Item cancelado.");
+    } catch {
+      toast.error("Erro ao cancelar.");
+    } finally {
+      setLoading(false);
+    }
   }
-
-  const isRequestingCancel = item.status === "request_cancel";
 
   async function handleCancelOp(approve: boolean) {
     if (!item.restaurant_id) return;
@@ -131,29 +131,16 @@ function KDSCard({
         toast.success("Cancelamento aprovado.");
       } else {
         await rejectItemCancellation(item.id);
-        toast.info("Cancelamento rejeitado pela cozinha.");
+        toast.info("Cancelamento rejeitado.");
       }
     } catch {
-      toast.error("Erro na operação de cancelamento.");
+      toast.error("Erro na operação.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleForceCancel() {
-    if (!item.restaurant_id) return;
-    if (!confirm("Tem certeza que deseja cancelar este item? O valor será estornado do subtotal da mesa.")) return;
-    
-    setLoading(true);
-    try {
-      await forceCancelItem(item.id, item.order_id, item.restaurant_id);
-      toast.success("Item cancelado com sucesso pela cozinha.");
-    } catch {
-      toast.error("Erro ao cancelar item.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const isRequestingCancel = item.status === "request_cancel";
 
   return (
     <div
@@ -163,7 +150,6 @@ function KDSCard({
         isRequestingCancel && "border-red-500 bg-red-500/10 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.3)]"
       )}
     >
-      {/* Cancellation Overlay Label */}
       {isRequestingCancel && (
         <div className="absolute top-0 right-0 left-0 bg-red-600 py-1 flex items-center justify-center gap-1.5 z-10">
           <AlertCircle className="h-3 w-3 text-white" />
@@ -171,7 +157,6 @@ function KDSCard({
         </div>
       )}
 
-      {/* Header row */}
       <div className={cn("mb-2 flex items-start justify-between gap-2", isRequestingCancel && "mt-4")}>
         <div className="flex-1">
           <p className="font-bold leading-tight text-white">{item.product_name}</p>
@@ -181,27 +166,17 @@ function KDSCard({
             <Clock className="h-3 w-3" />
             <span>{elapsed(item.created_at)}</span>
           </div>
-          <div className="flex gap-2 items-center">
-            <button 
-               onClick={(e) => { e.stopPropagation(); handlePrint(); }}
-               className="p-1.5 rounded-md bg-zinc-800 text-zinc-400 hover:text-white transition-opacity md:opacity-0 group-hover:opacity-100"
-               title="Imprimir Comanda"
-             >
-               <Printer className="h-3.5 w-3.5" />
-            </button>
-            <button 
-               onClick={(e) => { e.stopPropagation(); handleForceCancel(); }}
-               disabled={loading}
-               className="p-1.5 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all md:opacity-0 group-hover:opacity-100"
-               title="Cancelar Item Diretamente"
-             >
-               <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          <button
+            onClick={handleForceCancel}
+            disabled={loading}
+            className="p-1.5 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all md:opacity-0 group-hover:opacity-100"
+            title="Cancelar Item"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 
-      {/* Meta badges */}
       <div className="mb-3 flex flex-wrap gap-1.5">
         {item.table_label && (
           <span className={cn(
@@ -215,24 +190,22 @@ function KDSCard({
         <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs font-mono text-zinc-300">
           #{item.order_number}
         </span>
-        <span className="rounded-md bg-zinc-800 px-2 py-0.5 text-xs font-bold text-orange-400">
+        <span className="rounded-md bg-indigo-500/10 px-2 py-0.5 text-xs font-bold text-indigo-400 border border-indigo-500/20">
           ×{item.quantity}
         </span>
         {item.customer_name && (
           <span className="rounded-md bg-purple-500/10 px-2 py-0.5 text-xs font-bold text-purple-400 border border-purple-500/20">
-            {item.customer_name.split(' ')[0]}
+            {item.customer_name.split(" ")[0]}
           </span>
         )}
       </div>
 
-      {/* Notes */}
       {item.notes && (
         <div className="mb-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
           <p className="text-xs italic text-yellow-300">"{item.notes}"</p>
         </div>
       )}
 
-      {/* Action buttons */}
       <div className="flex flex-col gap-2">
         {isRequestingCancel ? (
           <div className="grid grid-cols-2 gap-2">
@@ -249,7 +222,7 @@ function KDSCard({
               disabled={loading}
               className="flex items-center justify-center gap-1.5 rounded-lg bg-zinc-800 py-2 text-xs font-bold text-white hover:bg-zinc-700 transition-colors"
             >
-               {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
               Negar
             </button>
           </div>
@@ -273,21 +246,18 @@ function KDSCard({
 }
 
 // ─── Column ───────────────────────────────────────────────────────────────────
-function KDSColumn({
+function BarColumn({
   col,
   items,
   tick,
-  restaurantName,
 }: {
   col: (typeof COLUMNS)[number];
   items: OrderItem[];
   tick: number;
-  restaurantName: string | null;
 }) {
   const Icon = col.icon;
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
-      {/* Column header */}
       <div className={cn("flex items-center justify-between border-b px-4 py-3", col.headerBg)}>
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-white" />
@@ -301,26 +271,24 @@ function KDSColumn({
         </span>
       </div>
 
-      {/* Items list */}
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {items.length === 0 ? (
           <div className="flex h-full items-center justify-center py-12">
             <p className="text-sm text-zinc-600">
-              {col.status === "pending" ? "Nenhum pedido novo" :
+              {col.status === "pending" ? "Nenhum drink novo" :
                col.status === "preparing" ? "Nada sendo preparado" :
                "Nenhum item pronto"}
             </p>
           </div>
         ) : (
           items.map((item) => (
-            <KDSCard
+            <BarCard
               key={item.id}
               item={item}
               nextStatus={col.nextStatus}
               nextLabel={col.nextLabel}
               nextBtnCls={col.nextBtnCls}
               tick={tick}
-              restaurantName={restaurantName}
             />
           ))
         )}
@@ -330,20 +298,11 @@ function KDSColumn({
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default function KDSPage() {
+export default function BarPage() {
   const { user } = useAuth();
-  const { pending, preparing, ready, loading, error } = useKDSItems(
-    user?.restaurant_id,
-    () => {
-      playNotificationSound();
-      toast.info("Nova comanda na cozinha! 🔔", { duration: 4000 });
-    },
-    handleNewItems,
-  );
   const { restaurant } = useRestaurant(user?.restaurant_id);
-  const [printItem, setPrintItem] = useState<OrderItem | null>(null);
 
-  // Queue of incoming orders — each entry is a batch of items from the same order
+  // Queue de comandas em tempo real
   const [comandaQueue, setComandaQueue] = useState<OrderItem[][]>([]);
 
   function dismissComanda() {
@@ -351,27 +310,23 @@ export default function KDSPage() {
   }
 
   function handleNewItems(newItems: OrderItem[]) {
-    // Group the batch by order_id (usually all the same, but safe to guard)
     const byOrder = new Map<string, OrderItem[]>();
     newItems.forEach((item) => {
-      const oid = item.order_id;
-      if (!byOrder.has(oid)) byOrder.set(oid, []);
-      byOrder.get(oid)!.push(item);
+      if (!byOrder.has(item.order_id)) byOrder.set(item.order_id, []);
+      byOrder.get(item.order_id)!.push(item);
     });
-    const batches = Array.from(byOrder.values());
-    setComandaQueue((q) => [...q, ...batches]);
+    setComandaQueue((q) => [...q, ...Array.from(byOrder.values())]);
   }
 
-  // Listen for local print events
-  useEffect(() => {
-    const handler = (e: any) => {
-      setPrintItem(e.detail);
-    };
-    window.addEventListener("print-kds-item", handler);
-    return () => window.removeEventListener("print-kds-item", handler);
-  }, []);
+  const { pending, preparing, ready, loading, error } = useBarItems(
+    user?.restaurant_id,
+    () => {
+      playNotificationSound();
+      toast.info("Novo drink no bar! 🍸", { duration: 4000 });
+    },
+    handleNewItems,
+  );
 
-  // Tick a vleach minute to refresh elapsed times without re-subscribing Firestore
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 30000);
@@ -396,141 +351,74 @@ export default function KDSPage() {
       const q = query(
         collection(db, "order_items"),
         where("restaurant_id", "==", user.restaurant_id),
+        where("station", "==", "bar"),
         where("created_at", ">=", Timestamp.fromDate(startOfDay))
       );
 
       const snap = await getDocs(q);
-      const kdsItems = snap.docs.map(d => d.data() as OrderItem);
+      const barItems = snap.docs.map(d => d.data() as OrderItem);
 
-      if (kdsItems.length === 0) {
-        toast.info("Nenhum item processado hoje.");
+      if (barItems.length === 0) {
+        toast.info("Nenhum drink servido hoje.");
         return;
       }
 
-      // ─── Helpers ─────────────────────────────────────────────────────
       const STATUS_LABEL: Record<string, string> = {
-        pending: "Aguardando",
-        preparing: "Preparando",
-        ready: "Pronto",
-        delivered: "Entregue",
-        cancelled: "Cancelado",
-        request_cancel: "Solicita Cancelamento",
+        pending: "Aguardando", preparing: "Preparando", ready: "Pronto",
+        delivered: "Entregue", cancelled: "Cancelado", request_cancel: "Solicita Cancelamento",
+      };
+      const fmtBRL = (c: number) => "R$ " + (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+      const cell = (v: string | number) => {
+        const s = String(v ?? "");
+        return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
       };
 
-      const fmtBRL = (cents: number) =>
-        "R$ " + (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-      const fmtDateTime = (ts: OrderItem["created_at"] | undefined) =>
-        ts?.toDate().toLocaleString("pt-BR", {
-          day: "2-digit", month: "2-digit", year: "numeric",
-          hour: "2-digit", minute: "2-digit", second: "2-digit",
-        }) ?? "";
-
-      // Escape a value for safe CSV: wrap in quotes if it contains comma, quote, or newline
-      const cell = (val: string | number) => {
-        const s = String(val ?? "");
-        return s.includes(",") || s.includes('"') || s.includes("\n")
-          ? `"${s.replace(/"/g, '""')}"`
-          : s;
-      };
-
-      const nowDate = new Date();
-      const restaurantName = restaurant?.name ?? "Restaurante";
-      const exportDate = nowDate.toLocaleString("pt-BR");
-
-      // ─── Sort by table then by time ───────────────────────────────────
-      const sorted = [...kdsItems].sort((a, b) => {
-        const tA = a.table_label ?? "zzz";
-        const tB = b.table_label ?? "zzz";
+      const sorted = [...barItems].sort((a, b) => {
+        const tA = a.table_label ?? "zzz", tB = b.table_label ?? "zzz";
         if (tA !== tB) return tA.localeCompare(tB, "pt-BR");
         return (a.created_at?.toMillis() ?? 0) - (b.created_at?.toMillis() ?? 0);
       });
 
-      // ─── Build lines ──────────────────────────────────────────────────
       const lines: string[] = [];
+      lines.push(`${cell("RELATÓRIO DO BAR")},${cell(restaurant?.name ?? "Restaurante")}`);
+      lines.push(`${cell("Data:")},${cell(now.toLocaleString("pt-BR"))}`);
+      lines.push(`${cell("Total de itens:")},${ cell(barItems.length)}`);
+      lines.push("");
+      lines.push(["Data/Hora", "Mesa", "Pedido Nº", "Cliente", "Drink", "Categoria", "Qtd", "Preço", "Total", "Obs.", "Status"].map(cell).join(","));
 
-      // Metadata block
-      lines.push(`${cell("RELATÓRIO DA COZINHA")},${cell(restaurantName)}`);
-      lines.push(`${cell("Data de exportação:")},${cell(exportDate)}`);
-      lines.push(`${cell("Total de itens:")},${ cell(kdsItems.length)}`);
-      lines.push(""); // blank line
-
-      // Column headers
-      lines.push([
-        "Data/Hora", "Mesa", "Pedido Nº", "Cliente",
-        "Produto", "Categoria", "Qtd", "Preço Unit.", "Total (R$)", "Obs.", "Status",
-      ].map(cell).join(","));
-
-      // Data rows with per-table subtotals
-      let currentTable = "";
-      let tableSubtotal = 0;
-      let tableQty = 0;
-      let grandTotal = 0;
-      let grandQty = 0;
-
-      const flushTable = () => {
-        if (!currentTable) return;
-        lines.push(
-          ["", `--- SUBTOTAL: ${currentTable}`, "", "", "", "",
-            tableQty, "", fmtBRL(tableSubtotal), "", ""].map(cell).join(",")
-        );
+      let curTable = "", tableTotal = 0, tableQty = 0, grandTotal = 0, grandQty = 0;
+      const flush = () => {
+        if (!curTable) return;
+        lines.push(["", `--- SUBTOTAL: ${curTable}`, "", "", "", "", tableQty, "", fmtBRL(tableTotal), "", ""].map(cell).join(","));
         lines.push("");
       };
 
-      sorted.forEach((item) => {
-        const tableKey = item.table_label ?? "Balcão";
-
-        if (tableKey !== currentTable) {
-          flushTable();
-          currentTable = tableKey;
-          tableSubtotal = 0;
-          tableQty = 0;
-        }
-
-        tableSubtotal += item.total_price ?? 0;
-        tableQty      += item.quantity   ?? 0;
-        grandTotal    += item.total_price ?? 0;
-        grandQty      += item.quantity   ?? 0;
-
+      sorted.forEach(item => {
+        const tk = item.table_label ?? "Balcão";
+        if (tk !== curTable) { flush(); curTable = tk; tableTotal = 0; tableQty = 0; }
+        tableTotal += item.total_price ?? 0; tableQty += item.quantity ?? 0;
+        grandTotal += item.total_price ?? 0; grandQty += item.quantity ?? 0;
         lines.push([
-          fmtDateTime(item.created_at),
-          tableKey,
-          `#${String(item.order_number ?? 0).padStart(3, "0")}`,
-          item.customer_name || "—",
-          item.product_name,
-          item.category_name || "—",
-          item.quantity,
-          fmtBRL(item.unit_price ?? 0),
-          fmtBRL(item.total_price ?? 0),
-          item.notes || "",
-          STATUS_LABEL[item.status] ?? item.status,
+          item.created_at?.toDate().toLocaleString("pt-BR") ?? "",
+          tk, `#${String(item.order_number ?? 0).padStart(3, "0")}`,
+          item.customer_name || "—", item.product_name, item.category_name || "—",
+          item.quantity, fmtBRL(item.unit_price ?? 0), fmtBRL(item.total_price ?? 0),
+          item.notes || "", STATUS_LABEL[item.status] ?? item.status,
         ].map(cell).join(","));
       });
+      flush();
+      lines.push(["", "=== TOTAL BAR", "", "", "", "", grandQty, "", fmtBRL(grandTotal), "", ""].map(cell).join(","));
 
-      flushTable();
-
-      // Grand total row
-      lines.push(
-        ["", "=== TOTAL GERAL", "", "", "", "",
-          grandQty, "", fmtBRL(grandTotal), "", ""].map(cell).join(",")
-      );
-
-      // ─── Download with BOM for Excel/Sheets encoding ──────────────────
-      const BOM = "\uFEFF";
-      const blob = new Blob([BOM + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `cozinha-${nowDate.toISOString().split("T")[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      link.setAttribute("download", `bar-${now.toISOString().split("T")[0]}.csv`);
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      toast.success(`Relatório gerado: ${kdsItems.length} itens exportados.`);
+      toast.success(`Relatório do bar: ${barItems.length} itens.`);
     } catch (e) {
-      console.error(e);
-      toast.error("Erro ao exportar relatório.");
+      console.error(e); toast.error("Erro ao exportar.");
     } finally {
       setExporting(false);
     }
@@ -543,39 +431,35 @@ export default function KDSPage() {
       {/* ── Header ── */}
       <header className="flex items-center justify-between border-b border-zinc-800 bg-zinc-950 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500">
-            <ChefHat className="h-5 w-5 text-white" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600">
+            <GlassWater className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-white">KDS — Cozinha</h1>
-            <p className="text-xs text-zinc-500">Kitchen Display System</p>
+            <h1 className="text-base font-bold text-white">Bar — Drinks & Beverages</h1>
+            <p className="text-xs text-zinc-500">Bar Display System</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Active item count */}
           {totalActive > 0 && (
-            <div className="flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-orange-400" />
-              <span className="text-xs font-semibold text-orange-400">{totalActive} item(s) ativo(s)</span>
+            <div className="flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-3 py-1.5">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+              <span className="text-xs font-semibold text-indigo-400">{totalActive} drink(s) ativo(s)</span>
             </div>
           )}
 
-          {/* Connection status */}
           <div className="flex items-center gap-1.5 text-xs text-green-400">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
             <Wifi className="h-3.5 w-3.5" />
             <span>Sincronismo Ativo</span>
           </div>
 
-          {/* Clock */}
           <div className="rounded-lg bg-zinc-900 px-3 py-1.5 font-mono text-sm text-zinc-300">
             {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </div>
 
           <div className="h-6 w-px bg-zinc-800 mx-1" />
 
-          {/* Export Report CSV */}
           <button
             onClick={handleExportDayWork}
             disabled={exporting}
@@ -590,7 +474,7 @@ export default function KDSPage() {
       {/* ── Content ── */}
       {loading ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-orange-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
         </div>
       ) : error ? (
         <div className="flex flex-1 flex-col items-center justify-center text-center">
@@ -600,7 +484,7 @@ export default function KDSPage() {
       ) : (
         <div className="flex flex-1 gap-4 overflow-hidden p-4">
           {COLUMNS.map((col) => (
-            <KDSColumn
+            <BarColumn
               key={col.status}
               col={col}
               items={
@@ -609,30 +493,23 @@ export default function KDSPage() {
                 ready
               }
               tick={tick}
-              restaurantName={restaurant?.name || null}
             />
           ))}
         </div>
       )}
 
-      {/* ── Footer — Composite Index Reminder ── */}
       {error?.includes("index") && (
         <div className="border-t border-zinc-800 bg-zinc-950 px-6 py-2 text-xs text-yellow-400">
-          ⚠️ Esta página requer um índice composto no Firestore. Clique no link que apareceu no console do Firebase para criá-lo automaticamente.
+          ⚠️ Esta página requer índice composto no Firestore. Clique no link que apareceu no console do Firebase.
         </div>
       )}
-
-      {/* Hidden Thermal Receipt for Printing */}
-      <div className="hidden print:block">
-        {printItem && <ThermalReceipt item={printItem} restaurantName={restaurant?.name || "Cozinha"} />}
-      </div>
 
       {/* Real-time Comanda Queue */}
       {comandaQueue.length > 0 && (
         <OrderComandaModal
           key={comandaQueue[0][0]?.order_id}
           items={comandaQueue[0]}
-          restaurantName={restaurant?.name ?? "Cozinha"}
+          restaurantName={restaurant?.name ?? "Bar"}
           onDismiss={dismissComanda}
         />
       )}

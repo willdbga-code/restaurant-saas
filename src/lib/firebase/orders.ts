@@ -56,6 +56,7 @@ export type OrderItem = {
   total_price: number;
   notes: string | null;
   status: OrderItemStatus;
+  station?: "kitchen" | "bar"; // Roteamento para cozinha ou bar
   customer_name?: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -81,8 +82,21 @@ export const orderItemsByOrderQuery = (restaurantId: string, orderId: string) =>
   );
 
 // NOTE: requires composite index on (restaurant_id ASC, status ASC) — Firebase will provide a direct link on first run
+// Cozinha: itens sem station, ou station == 'kitchen' (retrocompatível)
 export const kdsItemsQuery = (restaurantId: string) =>
-  query(collection(db, "order_items"), where("restaurant_id", "==", restaurantId), where("status", "in", ["pending", "preparing", "ready", "request_cancel"]));
+  query(collection(db, "order_items"),
+    where("restaurant_id", "==", restaurantId),
+    where("status", "in", ["pending", "preparing", "ready", "request_cancel"]),
+    where("station", "in", ["kitchen", null])
+  );
+
+// Bar: itens com station == 'bar'
+export const barItemsQuery = (restaurantId: string) =>
+  query(collection(db, "order_items"),
+    where("restaurant_id", "==", restaurantId),
+    where("status", "in", ["pending", "preparing", "ready", "request_cancel"]),
+    where("station", "==", "bar")
+  );
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 export const createOrder = async (p: { 
@@ -159,6 +173,7 @@ export const addOrderItem = async (p: {
   tableLabel: string | null; product: Product; categoryName: string;
   quantity: number; notes: string | null; address?: string | null;
   customerName?: string | null;
+  station?: "kitchen" | "bar"; // Roteamento de estação
 }) => {
   const orderRef = doc(db, "orders", p.orderId);
   const productRef = doc(db, "products", p.product.id);
@@ -204,6 +219,7 @@ export const addOrderItem = async (p: {
       notes: p.notes || null,
       address: p.address || null,
       status: "pending",
+      station: p.station ?? "kitchen", // Default: cozinha
       customer_name: p.customerName || null,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),

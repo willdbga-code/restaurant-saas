@@ -61,17 +61,22 @@ export default function LoginPage() {
         if (inviteId) {
           // --- Se o usuário já tem conta e está fazendo login para aceitar um novo convite ---
           const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
-          await claimFn({
+          const result: any = await claimFn({
             action: "claim_invitation",
             inviteId: inviteId,
             name: name,
           });
+          // CRITICAL: Força a renovação do token JWT para que o novo role seja enxergado imediatamente
+          await auth.currentUser?.getIdToken(true);
           toast.success("Convite aceito! Seu perfil foi atualizado.");
+          const role = result?.data?.role;
+          if (role === "kitchen" || role === "bar") router.push("/admin/kds");
+          else if (role === "waiter") router.push("/admin/pdv");
+          else router.push("/admin");
         } else {
           toast.success("Login realizado com sucesso!");
+          router.push("/admin");
         }
-        
-        router.push("/admin");
       } else {
 
         // Fluxo de Cadastro
@@ -82,12 +87,20 @@ export default function LoginPage() {
         if (inviteId) {
           // --- Fluxo de Membro Convidado ---
           const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
-          await claimFn({
+          const result: any = await claimFn({
             action: "claim_invitation",
             inviteId: inviteId,
             name: name,
           });
+          // CRITICAL: Força a renovação do token JWT para que o novo role seja enxergado imediatamente
+          await auth.currentUser?.getIdToken(true);
           toast.success("Convite aceito! Bem-vindo à equipe.");
+          const role = result?.data?.role;
+          if (role === "bar") router.push("/admin/bar");
+          else if (role === "kitchen") router.push("/admin/kds");
+          else if (role === "waiter") router.push("/admin/pdv");
+          else router.push("/admin");
+          return; // Evitar o router.push abaixo
         } else {
           // --- Fluxo de Onboarding de Novo Dono ---
           const restaurantId = "rest_" + Date.now().toString(36);

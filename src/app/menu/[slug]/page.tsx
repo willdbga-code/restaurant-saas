@@ -561,8 +561,12 @@ function MenuContent({ slug }: { slug: string }) {
       }
 
       await Promise.all(
-        cart.map(item =>
-          addOrderItem({
+        cart.map(item => {
+          // Detecta se a categoria é do bar para roteamento inteligente
+          const catData = categories.find(c => c.id === item.category_id || c.category_id === item.category_id);
+          const station: "kitchen" | "bar" = catData?.is_bar ? "bar" : "kitchen";
+
+          return addOrderItem({
             restaurantId: restaurant!.id!,
             orderId: currentOrderId!,
             orderNumber: currentOrderNumber || 0,
@@ -580,8 +584,9 @@ function MenuContent({ slug }: { slug: string }) {
             quantity: item.quantity,
             notes: item.notes || null,
             address: orderType === "delivery" ? address : null,
-          })
-        )
+            station,
+          });
+        })
       );
 
       // Pagamento foi removido daqui para focar na rastreabilidade e só acionar API na hora H.

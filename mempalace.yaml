@@ -1,0 +1,25 @@
+wing: restaurant_saas
+rooms:
+- name: functions
+  description: Files from functions/
+  keywords:
+  - functions
+  - functions
+- name: public
+  description: Files from public/
+  keywords:
+  - public
+  - public
+- name: src
+  description: Files from src/
+  keywords:
+  - src
+  - src
+- name: frontend
+  description: Files from components/
+  keywords:
+  - frontend
+  - components
+- name: general
+  description: Files that don't fit other rooms
+  keywords: []

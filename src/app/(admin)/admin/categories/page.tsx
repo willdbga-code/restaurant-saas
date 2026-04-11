@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Plus, Pencil, Trash2, Loader2, ImagePlus, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ImagePlus, GlassWater, Utensils } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCategories } from "@/hooks/useCategories";
 import { addCategory, updateCategory, deleteCategory, Category } from "@/lib/firebase/firestore";
@@ -34,9 +34,10 @@ type FormData = {
   description: string;
   sort_order: number;
   image_url: string | null;
+  is_bar: boolean;
 };
 
-const emptyForm: FormData = { name: "", description: "", sort_order: 0, image_url: null };
+const emptyForm: FormData = { name: "", description: "", sort_order: 0, image_url: null, is_bar: false };
 
 // ─── Image Upload Field ───────────────────────────────────────────────────────
 function ImageUploadField({
@@ -151,7 +152,8 @@ export default function CategoriesPage() {
       name: cat.name, 
       description: cat.description ?? "", 
       sort_order: cat.sort_order,
-      image_url: cat.image_url 
+      image_url: cat.image_url,
+      is_bar: cat.is_bar ?? false,
     });
     setOpen(true);
   }
@@ -165,7 +167,8 @@ export default function CategoriesPage() {
           name: form.name, 
           description: form.description || null, 
           sort_order: form.sort_order,
-          image_url: form.image_url 
+          image_url: form.image_url,
+          is_bar: form.is_bar,
         });
         toast.success("Categoria atualizada!");
       } else {
@@ -175,6 +178,7 @@ export default function CategoriesPage() {
           image_url: form.image_url,
           sort_order: form.sort_order,
           is_active: true,
+          is_bar: form.is_bar,
         });
         toast.success("Categoria criada!");
       }
@@ -231,6 +235,7 @@ export default function CategoriesPage() {
                     <TableHead className="text-zinc-400">Nome</TableHead>
                     <TableHead className="text-zinc-400">Descrição</TableHead>
                     <TableHead className="text-zinc-400">Ordem</TableHead>
+                    <TableHead className="text-zinc-400">Estação</TableHead>
                     <TableHead className="text-zinc-400">Status</TableHead>
                     <TableHead className="text-right text-zinc-400">Ações</TableHead>
                   </TableRow>
@@ -250,6 +255,17 @@ export default function CategoriesPage() {
                       <TableCell className="font-medium text-white">{cat.name}</TableCell>
                       <TableCell className="text-zinc-400">{cat.description ?? "—"}</TableCell>
                       <TableCell className="text-zinc-400">{cat.sort_order}</TableCell>
+                      <TableCell>
+                        {cat.is_bar ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-bold text-indigo-400 border border-indigo-500/20">
+                            <GlassWater className="h-3 w-3" /> Bar
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-bold text-orange-400 border border-orange-500/20">
+                            <Utensils className="h-3 w-3" /> Cozinha
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={cat.is_active ? "default" : "secondary"} className={cat.is_active ? "bg-green-500/10 text-green-400 hover:bg-green-500/10 border-green-500/20" : ""}>
                           {cat.is_active ? "Ativa" : "Inativa"}
@@ -359,6 +375,43 @@ export default function CategoriesPage() {
                 onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })}
                 className="border-zinc-700 bg-zinc-900 text-white"
               />
+            </div>
+
+            {/* Bar Station Toggle */}
+            <div
+              onClick={() => setForm({ ...form, is_bar: !form.is_bar })}
+              className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all ${
+                form.is_bar
+                  ? "border-indigo-500/40 bg-indigo-500/10"
+                  : "border-zinc-700 bg-zinc-900 hover:border-zinc-600"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                  form.is_bar ? "bg-indigo-500/20" : "bg-zinc-800"
+                }`}>
+                  {form.is_bar
+                    ? <GlassWater className="h-4 w-4 text-indigo-400" />
+                    : <Utensils className="h-4 w-4 text-zinc-500" />}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">
+                    {form.is_bar ? "Roteada para o Bar" : "Roteada para a Cozinha"}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {form.is_bar
+                      ? "Itens desta categoria vão para o KDS Bar"
+                      : "Itens desta categoria vão para o KDS Cozinha"}
+                  </p>
+                </div>
+              </div>
+              <div className={`h-5 w-9 rounded-full transition-colors relative ${
+                form.is_bar ? "bg-indigo-500" : "bg-zinc-700"
+              }`}>
+                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                  form.is_bar ? "translate-x-4" : "translate-x-0.5"
+                }`} />
+              </div>
             </div>
           </div>
           <DialogFooter>

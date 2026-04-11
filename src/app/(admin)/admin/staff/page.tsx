@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useStaff } from "@/hooks/useStaff";
 import { functions } from "@/lib/firebase/config";
 import { httpsCallable } from "firebase/functions";
-import { Loader2, Plus, Users, Shield, ChefHat, UserCircle } from "lucide-react";
+import { Loader2, Plus, Users, Shield, ChefHat, UserCircle, GlassWater } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,12 +22,14 @@ const ROLE_ICONS = {
   admin: Shield,
   waiter: UserCircle,
   kitchen: ChefHat,
+  bar: GlassWater,
 };
 
 const ROLE_LABELS = {
   admin: "Administrador",
   waiter: "Garçom / Atendente",
-  kitchen: "Cozinha / Bar",
+  kitchen: "Cozinha",
+  bar: "Bar / Beverages",
 };
 
 export default function StaffPage() {
@@ -111,7 +113,13 @@ export default function StaffPage() {
           return (
             <div key={member.uid} className="flex flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-5 p-6 transition-all hover:border-zinc-700">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800">
-                <Icon className={cn("h-6 w-6", member.role === "admin" ? "text-blue-400" : member.role === "kitchen" ? "text-orange-400" : "text-zinc-400")} />
+                <Icon className={cn(
+                  "h-6 w-6",
+                  member.role === "admin" ? "text-blue-400" :
+                  member.role === "kitchen" ? "text-orange-400" :
+                  member.role === "bar" ? "text-indigo-400" :
+                  "text-zinc-400"
+                )} />
               </div>
               <h3 className="text-lg font-bold text-white">{member.name}</h3>
               <p className="mt-1 text-xs text-zinc-500">{member.email}</p>
@@ -120,6 +128,7 @@ export default function StaffPage() {
                   "rounded-full px-2.5 py-1 text-xs font-semibold",
                   member.role === "admin" ? "bg-blue-500/10 text-blue-400" :
                   member.role === "kitchen" ? "bg-orange-500/10 text-orange-400" :
+                  member.role === "bar" ? "bg-indigo-500/10 text-indigo-400" :
                   "bg-zinc-800 text-zinc-300"
                 )}>
                   {ROLE_LABELS[member.role] || member.role}
@@ -173,7 +182,8 @@ export default function StaffPage() {
                 </SelectTrigger>
                 <SelectContent className="border-zinc-700 bg-zinc-900 text-white">
                   <SelectItem value="waiter">Garçom (Acesso ao PDV e Mesas)</SelectItem>
-                  <SelectItem value="kitchen">Cozinha (Acesso apenas ao KDS)</SelectItem>
+                  <SelectItem value="kitchen">Cozinha (Acesso apenas ao KDS Cozinha)</SelectItem>
+                  <SelectItem value="bar">Bar (Acesso apenas ao KDS Bar)</SelectItem>
                   <SelectItem value="admin">Administrador (Acesso Total)</SelectItem>
                 </SelectContent>
               </Select>

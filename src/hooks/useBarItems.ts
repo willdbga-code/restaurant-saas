@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { onSnapshot } from "firebase/firestore";
-import { OrderItem, kdsItemsQuery } from "@/lib/firebase/orders";
+import { OrderItem, barItemsQuery } from "@/lib/firebase/orders";
 
-export function useKDSItems(
+export function useBarItems(
   restaurantId: string | undefined,
   onNewOrder?: () => void,
   onNewItems?: (items: OrderItem[]) => void,
@@ -13,7 +13,6 @@ export function useKDSItems(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Debounce buffer: collect new items arriving within the same snapshot batch
   const bufferRef = useRef<OrderItem[]>([]);
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -30,10 +29,10 @@ export function useKDSItems(
 
     try {
       setLoading(true);
-      let isFirstLoad = true; // ignore items already in Firestore on mount
+      let isFirstLoad = true;
 
       unsubscribe = onSnapshot(
-        kdsItemsQuery(restaurantId),
+        barItemsQuery(restaurantId),
         (snap) => {
           if (isFirstLoad) {
             isFirstLoad = false;
@@ -45,14 +44,11 @@ export function useKDSItems(
             return;
           }
 
-          // Detect newly added items (not from local writes)
           if (!snap.metadata.hasPendingWrites) {
             snap.docChanges().forEach((change) => {
               if (change.type === "added") {
                 const newItem = { id: change.doc.id, ...change.doc.data() } as OrderItem;
                 onNewOrder?.();
-
-                // Buffer and debounce so items from the same order batch together
                 bufferRef.current.push(newItem);
                 if (timerRef.current) clearTimeout(timerRef.current);
                 timerRef.current = setTimeout(flushBuffer, 500);
@@ -67,13 +63,13 @@ export function useKDSItems(
           setLoading(false);
         },
         (err) => {
-          console.error("useKDSItems error:", err);
+          console.error("useBarItems error:", err);
           setError(err.message);
           setLoading(false);
         }
       );
     } catch (err: any) {
-      console.error("useKDSItems setup error:", err);
+      console.error("useBarItems setup error:", err);
       setError(err.message);
       setLoading(false);
     }

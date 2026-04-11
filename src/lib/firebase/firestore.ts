@@ -22,7 +22,7 @@ import { db } from "./config";
 export type AppUser = {
   uid: string;
   restaurant_id: string;
-  role: "admin" | "waiter" | "kitchen";
+  role: "admin" | "waiter" | "kitchen" | "bar";
   name: string;
   email: string;
   fcm_tokens?: string[]; // Para Web Push Notifications
@@ -72,6 +72,7 @@ export type Category = {
   image_url: string | null;
   sort_order: number;
   is_active: boolean;
+  is_bar?: boolean; // Se true, itens desta categoria vão para o KDS Bar
   created_at: Timestamp;
   updated_at: Timestamp;
 };
