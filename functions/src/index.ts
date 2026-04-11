@@ -1,5 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 
@@ -255,3 +255,58 @@ export const onNotificationCreated = onDocumentCreated("notifications/{notifId}"
 
 export { stripeWebhook } from "./billing";
 export { infinitepayWebhook } from "./infinitepay";
+
+/**
+ * 6. Auto-exclusão do cliente quando a conta é fechada.
+ * Quando um pedido muda de qualquer status para "closed",
+ * verifica se o waiter_uid pertence a um cliente anônimo e
+ * deleta o documento do usuário + a conta anônima do Firebase Auth.
+ */
+export const onOrderClosed = onDocumentUpdated("orders/{orderId}", async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+
+  // Só executa na transição exata para "closed"
+  if (!before || !after) return;
+  if (before.status === "closed" || after.status !== "closed") return;
+
+  const waiterUid = after.waiter_uid as string | null;
+  if (!waiterUid) {
+    logger.info(`Pedido ${event.params.orderId} fechado sem waiter_uid, ignorando limpeza.`);
+    return;
+  }
+
+  try {
+    const userRef = db.collection("users").doc(waiterUid);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      logger.info(`Doc de usuário ${waiterUid} não encontrado, nada a limpar.`);
+      return;
+    }
+
+    const userData = userSnap.data();
+    
+    // Só limpa se for um cliente (role: 'customer' ou sem role)
+    if (userData?.role !== "customer") {
+      logger.info(`Usuário ${waiterUid} tem role '${userData?.role}', não é cliente. Ignorando.`);
+      return;
+    }
+
+    // 1. Deleta o documento do Firestore
+    await userRef.delete();
+    logger.info(`Doc do cliente ${waiterUid} (${userData?.customer_tag}) deletado após fechamento do pedido ${event.params.orderId}.`);
+
+    // 2. Deleta o usuário anônimo do Firebase Auth (limpeza completa)
+    try {
+      await admin.auth().deleteUser(waiterUid);
+      logger.info(`Usuário anônimo ${waiterUid} deletado do Firebase Auth.`);
+    } catch (authErr: any) {
+      // Silencia: o usuário pode já ter sido deletado ou a conta pode ser real
+      logger.warn(`Não foi possível deletar Auth user ${waiterUid}: ${authErr.message}`);
+    }
+
+  } catch (err: any) {
+    logger.error(`Erro ao limpar cliente ${waiterUid} após fechamento do pedido:`, err);
+  }
+});

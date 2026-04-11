@@ -197,7 +197,7 @@ export const addCategory = (restaurantId: string, data: Omit<Category, "id" | "c
   addDoc(collection(db, "categories"), {
     ...data,
     restaurant_id: restaurantId, // CONSTRAINT #1: sempre injeta restaurant_id
-    category_id: crypto.randomUUID(),
+    category_id: Date.now().toString(36) + Math.random().toString(36).substring(2),
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
   });
@@ -214,7 +214,7 @@ export const addProduct = (restaurantId: string, data: Omit<Product, "id" | "pro
   addDoc(collection(db, "products"), {
     ...data,
     restaurant_id: restaurantId, // CONSTRAINT #1
-    product_id: crypto.randomUUID(),
+    product_id: Date.now().toString(36) + Math.random().toString(36).substring(2),
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
   });
@@ -233,7 +233,7 @@ export const addTable = async (restaurantId: string, data: Omit<Table, "id" | "t
   const docRef = await addDoc(collection(db, "tables"), {
     ...data,
     restaurant_id: restaurantId,
-    table_id: crypto.randomUUID(),
+    table_id: Date.now().toString(36) + Math.random().toString(36).substring(2),
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
   });

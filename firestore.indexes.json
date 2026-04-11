@@ -31,6 +31,15 @@
         { "fieldPath": "restaurant_id", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "order_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "restaurant_id", "order": "ASCENDING" },
+        { "fieldPath": "station", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -60,9 +60,17 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      // PROJETO PONTE INVISÍVEL: Clientes autenticados (incluindo anônimos via PWA) 
-      // recebem status de staff para garantir que pedidos e estoque fluam sem fricção.
-      return isSuperAdmin() || isAdmin() || isWaiter() || isKitchen() || isBar() || isAuthed();
+      // Staff real: membros com roles definidas. Clientes anônimos NÃO são staff.
+      // Eles recebem apenas as permissões explícitas de que precisam.
+      return isSuperAdmin() || isAdmin() || isWaiter() || isKitchen() || isBar();
+    }
+
+    function isCustomerUser() {
+      // Usuário anônimo que se identificou no cardápio (criou doc com role: 'customer')
+      return isAuthed() && (
+        request.auth.token.get('role', null) == null ||
+        request.auth.token.get('role', null) == 'customer'
+      );
     }
 
     function isCustomer() {
@@ -237,10 +245,12 @@ service cloud.firestore {
     }
 
     match /order_payments/{paymentId} {
+      // Staff pode ver todos os pagamentos do restaurante
       allow get: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin());
       allow list: if isStaff() && (request.query.limit <= 100 && resourceIsMyRestaurant());
+      // Cliente E staff podem criar pagamentos (cliente paga sua própria conta)
       allow create: if restaurantIsActive(request.resource.data.restaurant_id) && 
-                      isStaff() && (incomingIsMyRestaurant() || isSuperAdmin());
+                      (isStaff() || isCustomerUser()) && (incomingIsMyRestaurant() || isSuperAdmin());
       allow update, delete: if isSuperAdmin();
     }
 

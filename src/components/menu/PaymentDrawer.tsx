@@ -5,7 +5,6 @@ import { X, CreditCard, Users, QrCode, Copy, CheckCircle2, Loader2, Landmark } f
 import { Order, PaymentMethod, processOrderPayment, notifyPaymentActivity } from "@/lib/firebase/orders";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { createCustomerCheckoutLink } from "@/app/actions/checkout";
 
 import { Restaurant } from "@/lib/firebase/firestore";
 
@@ -88,41 +87,6 @@ export function PaymentDrawer({ isOpen, onClose, order, restaurant }: PaymentDra
     }
   }
 
-  async function handleMercadoPago() {
-    if (!restaurant?.id || !orderData.id) return;
-    setLoading(true);
-    
-    // Abre a aba vazia sincronamente para evitar bloqueadores de pop-up no Safari/Mobile
-    const newWindow = window.open("about:blank", "_blank");
-    
-    try {
-      const amountToPay = splitCount > 1 ? myPart : (customAmount > 0 ? customAmount : remaining);
-      const { url } = await createCustomerCheckoutLink(
-        restaurant.id,
-        orderData.id,
-        amountToPay,
-        {
-           name: "Cliente da Mesa " + (orderData.table_label || ""),
-           email: "checkout@saas.com",
-           phone_number: "00000000000"
-        }
-      );
-      if (url && newWindow) {
-        newWindow.location.href = url;
-        toast.info("Aba de pagamento segura foi aberta!");
-        onClose(); // Fecha a gaveta temporariamente para o cliente ter foco
-      } else {
-        if (newWindow) newWindow.close();
-        toast.error("Erro interno. Tente novamente.");
-      }
-    } catch(err) {
-       if (newWindow) newWindow.close();
-       toast.error("Erro de conexão com Checkout Mercado Pago.");
-    } finally {
-       setLoading(false);
-    }
-  }
-
   function copyPix() {
     navigator.clipboard.writeText("00020126360014BR.GOV.BCB.PIX0114+5511999999999520400005303986540510.005802BR5913RESTAURANTE6008SAO PAULO62070503***6304ABCD");
     toast.success("Código Pix copiado!");
@@ -201,17 +165,6 @@ export function PaymentDrawer({ isOpen, onClose, order, restaurant }: PaymentDra
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-              {restaurant?.payment_linked && restaurant?.payment_provider === "infinitepay" ? (
-                <button 
-                  onClick={handleMercadoPago}
-                  disabled={loading}
-                  className="btn-modern bg-[#009EE3] text-white w-full py-5 rounded-3xl text-lg font-black shrink-0 hover:bg-[#0088CC] transition-all shadow-xl flex items-center justify-center gap-3"
-                >
-                  {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : <CreditCard className="h-6 w-6" />}
-                  Pagar via Mercado Pago
-                </button>
-              ) : (
-                <>
                   <button 
                     onClick={() => setStep("pix")}
                     className="btn-modern btn-orange-glow w-full py-5 rounded-3xl text-lg font-black flex items-center justify-center gap-3"
@@ -227,8 +180,6 @@ export function PaymentDrawer({ isOpen, onClose, order, restaurant }: PaymentDra
                     Cartão de Crédito
                     <span className="absolute right-6 top-1/2 -translate-y-1/2 bg-white/10 text-[10px] text-zinc-500 px-3 py-1 rounded-full font-black tracking-tight">EM BREVE</span>
                   </button>
-                </>
-              )}
             </div>
             
             <p className="text-center text-[11px] text-zinc-600 font-black uppercase tracking-[0.2em] pt-4">

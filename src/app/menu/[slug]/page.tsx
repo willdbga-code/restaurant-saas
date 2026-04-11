@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, use, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { onSnapshot, doc, query, collection, where, getDocs, orderBy, addDoc, serverTimestamp } from "firebase/firestore";
+import { onSnapshot, doc, query, collection, where, getDocs, orderBy, addDoc, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase/config";
-import { signInAnonymously } from "firebase/auth";
+import { signInAnonymously, signOut } from "firebase/auth";
 import { createCustomerCheckoutLink } from "@/app/actions/checkout";
 import { getRestaurantBySlug, getMenuCategories, getMenuProducts, getTable } from "@/lib/firebase/menu";
 import { createOrder, addOrderItem, notifyPaymentActivity } from "@/lib/firebase/orders";
@@ -307,6 +307,117 @@ function CustomizationDrawer({
   );
 }
 
+// ─── Identification Screen ───────────────────────────────────────────────────
+function IdentificationScreen({
+  restaurant,
+  tableLabel,
+  onIdentify,
+}: {
+  restaurant: Restaurant;
+  tableLabel: string | null;
+  onIdentify: (name: string) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [previewCode] = useState(() => Math.random().toString(36).substring(2, 6).toUpperCase());
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || loading) return;
+    setLoading(true);
+    try {
+      await onIdentify(name.trim());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const branding = restaurant.branding;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
+      <ThemeInjector color={branding?.primary_color} />
+
+      {/* Background glow */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary-theme/10 rounded-full blur-[100px]" />
+      </div>
+
+      <div className="relative z-10 w-full max-w-sm space-y-8">
+        {/* Logo / Header */}
+        <div className="text-center space-y-4">
+          <div className="mx-auto h-20 w-20 rounded-[1.75rem] bg-white/5 backdrop-blur-xl border border-white/10 flex items-center justify-center shadow-2xl p-3">
+            {restaurant.logo_url ? (
+              <img src={restaurant.logo_url} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              <UtensilsCrossed className="h-9 w-9 text-white/20" />
+            )}
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-white tracking-tighter leading-tight">
+              {restaurant.name}
+            </h1>
+            {tableLabel && (
+              <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-primary-theme/15 rounded-full border border-primary-theme/25">
+                <MapPin className="h-3 w-3 text-primary-theme" />
+                <span className="text-[11px] font-black text-primary-theme uppercase tracking-wider">{tableLabel}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Preview do código */}
+        <div className="bg-white/3 border border-white/8 rounded-3xl p-5 text-center space-y-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">Seu identificador na mesa</p>
+          <p className="text-2xl font-black text-white tracking-tight">
+            {name.trim() ? (
+              <>{name.trim()} <span className="text-primary-theme">#{previewCode}</span></>
+            ) : (
+              <span className="text-zinc-600">Nome <span className="text-zinc-700">#{previewCode}</span></span>
+            )}
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+              Como podemos te chamar?
+            </label>
+            <input
+              id="customer-name-input"
+              type="text"
+              autoFocus
+              placeholder="Ex: Paulo, Ana, João..."
+              value={name}
+              onChange={e => setName(e.target.value)}
+              maxLength={32}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-lg font-bold text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary-theme/50 focus:border-primary-theme/50 transition-all"
+            />
+          </div>
+
+          <button
+            id="customer-identify-btn"
+            type="submit"
+            disabled={!name.trim() || loading}
+            className="w-full bg-primary-theme text-white rounded-2xl py-5 font-black text-lg active:scale-95 transition-all flex items-center justify-center gap-2 shadow-2xl shadow-primary-theme/20 disabled:opacity-40 disabled:scale-100"
+          >
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>{name.trim() ? `Entrar como ${name.trim()}` : "Digite seu nome"} <ArrowRight className="h-5 w-5" /></>
+            )}
+          </button>
+        </form>
+
+        <p className="text-center text-[11px] text-zinc-600 font-medium">
+          Seu nome aparece nos pedidos para a cozinha e garçom.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Content ─────────────────────────────────────────────────────────────
 function MenuContent({ slug }: { slug: string }) {
   const searchParams = useSearchParams();
@@ -335,6 +446,9 @@ function MenuContent({ slug }: { slug: string }) {
   const [requestSent, setRequestSent] = useState(false);
   const [isConcessionActive, setIsConcessionActive] = useState(false);
 
+  // ─── Customer Identity (Plano B) ───────────────────────────────────────────
+  const [customerTag, setCustomerTag] = useState<string | null>(null);
+
   const { order: activeOrder, items: orderItems, derivedStatus } = useActiveOrder(restaurant?.id, tableId ?? "balcao");
   const [customerName, setCustomerName] = useState("");
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "delivery">("dine_in");
@@ -350,11 +464,36 @@ function MenuContent({ slug }: { slug: string }) {
     async function init() {
       try {
         if (!auth.currentUser) {
-          try { await signInAnonymously(auth); } catch (e) {}
+          try { await signInAnonymously(auth); } catch (e) {
+            console.error("Falha no sign-in anônimo:", e);
+          }
         }
         const rest = await getRestaurantBySlug(slug);
         if (!rest) { setStatus("error"); return; }
         setRestaurant(rest);
+
+        // ─── Restaura identificação salva no localStorage ────────────────────
+        if (rest?.id && tableId) {
+          const savedTag = localStorage.getItem(`customer_tag_${rest.id}_${tableId}`);
+          const savedName = localStorage.getItem(`customer_name_${rest.id}_${tableId}`);
+          if (savedTag && savedName) {
+            setCustomerTag(savedTag);
+            setCustomerName(savedName);
+            // Restaura o user doc caso a sessão anônima tenha mudado
+            if (auth.currentUser?.isAnonymous) {
+              try {
+                await setDoc(doc(db, "users", auth.currentUser.uid), {
+                  restaurant_id: rest.id,
+                  role: "customer",
+                  table_id: tableId,
+                  customer_name: savedName,
+                  customer_tag: savedTag,
+                  updated_at: serverTimestamp(),
+                }, { merge: true });
+              } catch (e) { /* silencioso */ }
+            }
+          }
+        }
 
         if (rest && rest.id && tableId && typeof tableId === "string") {
           const t = await getTable(rest.id, tableId);
@@ -444,6 +583,50 @@ function MenuContent({ slug }: { slug: string }) {
       setShowLanding(false);
     }
   }, [activeOrder, showLanding]);
+
+  // Auto-reset: quando conta fechada, limpa o customer tag da sessão e invalida o usuário anônimo
+  useEffect(() => {
+    if (activeOrder?.status === "closed" && customerTag && restaurant?.id && tableId) {
+      localStorage.removeItem(`customer_tag_${restaurant.id}_${tableId}`);
+      localStorage.removeItem(`customer_name_${restaurant.id}_${tableId}`);
+      setCustomerTag(null);
+      setCustomerName("");
+      // Desloga o usuário anônimo para forçar uma nova sessão limpa no próximo acesso
+      signOut(auth).catch(() => {});
+    }
+  }, [activeOrder?.status, customerTag, restaurant?.id, tableId]);
+
+  // ─── Identificação do Cliente (Plano B) ──────────────────────────────────────
+  async function handleIdentify(name: string) {
+    if (!restaurant?.id || !auth.currentUser) return;
+    const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const tag = `${name} #${code}`;
+    try {
+      // Plano B: criar/atualizar doc de usuário com restaurant_id e identity
+      await setDoc(doc(db, "users", auth.currentUser.uid), {
+        restaurant_id: restaurant.id,
+        role: "customer",
+        table_id: tableId || null,
+        customer_name: name,
+        customer_tag: tag,
+        created_at: serverTimestamp(),
+      }, { merge: true });
+
+      // Persiste localmente para sobreviver a reloads
+      if (tableId) {
+        localStorage.setItem(`customer_tag_${restaurant.id}_${tableId}`, tag);
+        localStorage.setItem(`customer_name_${restaurant.id}_${tableId}`, name);
+      }
+
+      setCustomerTag(tag);
+      setCustomerName(name);
+      setShowLanding(false); // Vai direto pro menu
+      toast.success(`Bem-vindo, ${name}! 🎉`);
+    } catch (err) {
+      console.error("Erro ao identificar cliente:", err);
+      toast.error("Erro ao entrar. Tente novamente.");
+    }
+  }
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -546,13 +729,20 @@ function MenuContent({ slug }: { slug: string }) {
       // Se não for mesa real (delivery, takeaway, balcão genérico), força a criar NOVO pedido sempre.
       const isDineInTable = orderType === "dine_in" && tableId && tableId !== "balcao";
 
+      // ESPELHO PDV: Se a mesa já tem um pedido aberto pelo garçom, vinculamos a ele.
+      // Isso faz os itens do cliente aparecerem automaticamente no PDV (shared order).
+      if (isDineInTable && !currentOrderId && table?.current_order_id) {
+        currentOrderId = table.current_order_id;
+        currentOrderNumber = 0; // Será lido do pedido existente pelo useActiveOrder
+      }
+
       if (!isDineInTable || !currentOrderId) {
         const orderRef = await createOrder({
           restaurantId: restaurant.id!,
           tableId: tableId ?? "balcao",
           tableLabel: tableLabel ?? (orderType === "delivery" ? "Delivery" : "Balcão"),
-          waiterUid: "customer",
-          waiterName: customerName || "Cliente",
+          waiterUid: auth.currentUser?.uid ?? "customer",
+          waiterName: customerTag || customerName || "Cliente",
           type: orderType,
           address: orderType === "delivery" ? address : null,
         });
@@ -571,7 +761,7 @@ function MenuContent({ slug }: { slug: string }) {
             orderId: currentOrderId!,
             orderNumber: currentOrderNumber || 0,
             tableLabel: tableLabel ?? (orderType === "delivery" ? "Delivery" : "Balcão"),
-            customerName: customerName || null,
+            customerName: customerTag || customerName || null, // usa o tag ("Paulo #K7X3") como identificador
             product: {
               id: item.productId,
               product_id: item.product_id,
@@ -683,6 +873,17 @@ function MenuContent({ slug }: { slug: string }) {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // ─── Tela de Identificação (Plano B): aparece quando mesa aberta e cliente não identificado
+  if (status === "ready" && tableId && tableId !== "balcao" && !customerTag && restaurant) {
+    return (
+      <IdentificationScreen
+        restaurant={restaurant}
+        tableLabel={tableLabel}
+        onIdentify={handleIdentify}
+      />
     );
   }
 

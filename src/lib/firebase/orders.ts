@@ -81,21 +81,21 @@ export const orderItemsByOrderQuery = (restaurantId: string, orderId: string) =>
     where("order_id", "==", orderId)
   );
 
-// NOTE: requires composite index on (restaurant_id ASC, status ASC) — Firebase will provide a direct link on first run
-// Cozinha: itens sem station, ou station == 'kitchen' (retrocompatível)
+// NOTE: requires composite index on (restaurant_id ASC, status ASC, station ASC)
+// Cozinha: itens com station == 'kitchen' (padrão salvo em addOrderItem)
 export const kdsItemsQuery = (restaurantId: string) =>
   query(collection(db, "order_items"),
     where("restaurant_id", "==", restaurantId),
-    where("status", "in", ["pending", "preparing", "ready", "request_cancel"]),
-    where("station", "in", ["kitchen", null])
+    where("station", "==", "kitchen"),
+    where("status", "in", ["pending", "preparing", "ready", "request_cancel"])
   );
 
 // Bar: itens com station == 'bar'
 export const barItemsQuery = (restaurantId: string) =>
   query(collection(db, "order_items"),
     where("restaurant_id", "==", restaurantId),
-    where("status", "in", ["pending", "preparing", "ready", "request_cancel"]),
-    where("station", "==", "bar")
+    where("station", "==", "bar"),
+    where("status", "in", ["pending", "preparing", "ready", "request_cancel"])
   );
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
@@ -113,7 +113,12 @@ export const createOrder = async (p: {
   const newOrderRef = doc(ordersCol);
   const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
-  return await runTransaction(db, async (transaction) => {
+  // ─── PASSO 1: Cria o pedido e incrementa o contador numa transação atômica ───
+  // IMPORTANTE: A atualização da mesa foi removida desta transação.
+  // Clientes anônimos não têm restaurant_id no token, então a avaliação de
+  // permissão de "resourceIsMyRestaurant()" falha dentro de transações,
+  // abortando o pedido inteiro. A mesa é atualizada separadamente abaixo.
+  await runTransaction(db, async (transaction) => {
     const metaSnap = await transaction.get(metadataRef);
     let nextNumber = 1;
 
@@ -134,9 +139,11 @@ export const createOrder = async (p: {
     // Cria o pedido com o número sequencial garantido
     transaction.set(newOrderRef, {
       restaurant_id: p.restaurantId,
-      order_id: crypto.randomUUID(),
+      order_id: newOrderRef.id,
       order_number: nextNumber,
-      table_id: p.tableId || null,
+      // Se tableId for "balcao" (pedido de balcão/delivery/takeaway), salva null
+      // para evitar que tableBelongsToRestaurant() tente ler tables/balcao (inexistente)
+      table_id: (p.tableId && p.tableId !== "balcao") ? p.tableId : null,
       table_label: p.tableLabel || null,
       type: p.type || "dine_in",
       waiter_uid: p.waiterUid || null,
@@ -153,19 +160,22 @@ export const createOrder = async (p: {
       confirmed_at: null, 
       closed_at: null,
     });
-
-    // ─── NOVO: Vincula o pedido à mesa atomicamente ───
-    if (p.tableId && p.tableId !== "balcao") {
-      const tableRef = doc(db, "tables", p.tableId);
-      transaction.update(tableRef, {
-        status: "occupied",
-        current_order_id: newOrderRef.id,
-        updated_at: serverTimestamp()
-      });
-    }
-
-    return newOrderRef;
   });
+
+  // ─── PASSO 2: Vincula o pedido à mesa (fora da transação) ───
+  // Esta operação usa a regra permissiva do Firestore que permite qualquer
+  // usuário autenticado (incluindo anônimo) atualizar apenas esses 3 campos.
+  if (p.tableId && p.tableId !== "balcao") {
+    const { updateDoc } = await import("firebase/firestore");
+    const tableRef = doc(db, "tables", p.tableId);
+    await updateDoc(tableRef, {
+      status: "occupied",
+      current_order_id: newOrderRef.id,
+      updated_at: serverTimestamp()
+    });
+  }
+
+  return newOrderRef;
 };
 
 export const addOrderItem = async (p: {
@@ -204,7 +214,7 @@ export const addOrderItem = async (p: {
     // Cria o item do pedido
     transaction.set(newItemRef, {
       restaurant_id: p.restaurantId,
-      item_id: crypto.randomUUID(),
+      item_id: newItemRef.id,
       order_id: p.orderId,
       order_number: p.orderNumber || 0,
       table_label: p.tableLabel || null,
