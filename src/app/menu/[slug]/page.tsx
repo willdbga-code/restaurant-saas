@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, use, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { onSnapshot, doc, query, collection, where, getDocs, orderBy, addDoc, serverTimestamp, setDoc, getDoc } from "firebase/firestore";
+import { onSnapshot, doc, query, collection, where, getDocs, orderBy, addDoc, serverTimestamp, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase/config";
 import { signInAnonymously, signOut } from "firebase/auth";
 import { createCustomerCheckoutLink } from "@/app/actions/checkout";
@@ -602,15 +602,26 @@ function MenuContent({ slug }: { slug: string }) {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
     const tag = `${name} #${code}`;
     try {
-      // Plano B: criar/atualizar doc de usuário com restaurant_id e identity
-      await setDoc(doc(db, "users", auth.currentUser.uid), {
-        restaurant_id: restaurant.id,
-        role: "customer",
-        table_id: tableId || null,
-        customer_name: name,
-        customer_tag: tag,
-        created_at: serverTimestamp(),
-      }, { merge: true });
+      // Plano B: Tenta dar update primeiro para não sobrepor roles de Admins que estão testando.
+      // E também para não engatilhar bloqueios de re-escrita de 'role' no Firestore Rules.
+      try {
+        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+          table_id: tableId || null,
+          customer_name: name,
+          customer_tag: tag,
+          updated_at: serverTimestamp(),
+        });
+      } catch (updateError: any) {
+        // Se o documento não existe ainda (novo usuário anônimo), faz a criação completa.
+        await setDoc(doc(db, "users", auth.currentUser.uid), {
+          restaurant_id: restaurant.id,
+          role: "customer",
+          table_id: tableId || null,
+          customer_name: name,
+          customer_tag: tag,
+          created_at: serverTimestamp(),
+        });
+      }
 
       // Persiste localmente para sobreviver a reloads
       if (tableId) {
