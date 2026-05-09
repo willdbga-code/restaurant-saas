@@ -255,6 +255,8 @@ export const onNotificationCreated = onDocumentCreated("notifications/{notifId}"
 
 export { stripeWebhook } from "./billing";
 export { infinitepayWebhook } from "./infinitepay";
+export { mercadopagoWebhook } from "./mercadopago";
+export { createPixPayment } from "./payment-gateway";
 
 /**
  * 6. Auto-exclusão do cliente quando a conta é fechada.

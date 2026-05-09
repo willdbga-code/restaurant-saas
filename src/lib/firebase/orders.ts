@@ -355,8 +355,24 @@ export const updateOrderItemNotes = (itemId: string, notes: string | null) =>
 export const confirmOrder = (orderId: string) =>
   updateDoc(doc(db, "orders", orderId), { status: "confirmed", confirmed_at: serverTimestamp(), updated_at: serverTimestamp() });
 
-export const closeOrder = (orderId: string, paymentMethod: PaymentMethod) =>
-  updateDoc(doc(db, "orders", orderId), { status: "closed", payment_status: "paid", payment_method: paymentMethod, closed_at: serverTimestamp(), updated_at: serverTimestamp(), amount_paid: increment(0) }); // Will be handled by processOrderPayment
+export const closeOrder = async (orderId: string, paymentMethod: PaymentMethod) => {
+  const orderRef = doc(db, "orders", orderId);
+  
+  return await runTransaction(db, async (transaction) => {
+    const orderSnap = await transaction.get(orderRef);
+    if (!orderSnap.exists()) return;
+    const order = orderSnap.data() as Order;
+
+    transaction.update(orderRef, {
+      status: "closed",
+      payment_status: "paid",
+      payment_method: paymentMethod,
+      amount_paid: order.total, // Seta o valor pago como o total real do pedido
+      closed_at: serverTimestamp(),
+      updated_at: serverTimestamp(),
+    });
+  });
+};
 
 export type OrderPayment = {
   id: string;

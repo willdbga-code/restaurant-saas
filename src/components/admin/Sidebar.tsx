@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Tag, ShoppingBag, TableProperties, ChefHat, LogOut, MonitorCheck, UtensilsCrossed, Settings, Users, Palette, ShieldCheck, BarChart3, GlassWater } from "lucide-react";
+import { LayoutGrid, Tag, ShoppingBag, TableProperties, ChefHat, LogOut, MonitorCheck, UtensilsCrossed, Settings, Users, Palette, ShieldCheck, BarChart3, GlassWater, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
@@ -16,7 +16,7 @@ const baseNav = [
   { href: "/admin/tables",       label: "Mesas",            icon: TableProperties },
   { href: "/admin/staff",        label: "Equipe",           icon: Users },
   { href: "/admin/settings",     label: "Configurações",    icon: Settings },
-  { href: "/admin/billing",      label: "Assinatura",       icon: ShoppingBag },
+  { href: "/admin/billing",      label: "Assinatura",       icon: CreditCard },
   { href: "/admin/sales-report", label: "Relatório de Vendas", icon: BarChart3 },
 ];
 

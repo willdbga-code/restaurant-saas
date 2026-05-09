@@ -464,8 +464,13 @@ function MenuContent({ slug }: { slug: string }) {
     async function init() {
       try {
         if (!auth.currentUser) {
-          try { await signInAnonymously(auth); } catch (e) {
+          try { 
+            await signInAnonymously(auth); 
+          } catch (e: any) {
             console.error("Falha no sign-in anônimo:", e);
+            if (e.code === 'auth/operation-not-allowed') {
+              toast.error("Aviso: Autenticação Anônima desativada no Firebase!");
+            }
           }
         }
         const rest = await getRestaurantBySlug(slug);
@@ -474,8 +479,8 @@ function MenuContent({ slug }: { slug: string }) {
 
         // ─── Restaura identificação salva no localStorage ────────────────────
         if (rest?.id && tableId) {
-          const savedTag = localStorage.getItem(`customer_tag_${rest.id}_${tableId}`);
-          const savedName = localStorage.getItem(`customer_name_${rest.id}_${tableId}`);
+          const savedTag = localStorage.getItem(`customer_tag_${rest.id}`);
+          const savedName = localStorage.getItem(`customer_name_${rest.id}`);
           if (savedTag && savedName) {
             setCustomerTag(savedTag);
             setCustomerName(savedName);
@@ -587,8 +592,8 @@ function MenuContent({ slug }: { slug: string }) {
   // Auto-reset: quando conta fechada, limpa o customer tag da sessão e invalida o usuário anônimo
   useEffect(() => {
     if (activeOrder?.status === "closed" && customerTag && restaurant?.id && tableId) {
-      localStorage.removeItem(`customer_tag_${restaurant.id}_${tableId}`);
-      localStorage.removeItem(`customer_name_${restaurant.id}_${tableId}`);
+      localStorage.removeItem(`customer_tag_${restaurant.id}`);
+      localStorage.removeItem(`customer_name_${restaurant.id}`);
       setCustomerTag(null);
       setCustomerName("");
       // Desloga o usuário anônimo para forçar uma nova sessão limpa no próximo acesso
@@ -596,38 +601,43 @@ function MenuContent({ slug }: { slug: string }) {
     }
   }, [activeOrder?.status, customerTag, restaurant?.id, tableId]);
 
-  // ─── Identificação do Cliente (Plano B) ──────────────────────────────────────
   async function handleIdentify(name: string) {
-    if (!restaurant?.id || !auth.currentUser) return;
+    if (!restaurant?.id) return;
+    
+    // Tenta re-autenticar se estiver nulo (caso a internet tenha falhado na entrada)
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch (e: any) {
+        if (e.code === 'auth/operation-not-allowed') {
+          toast.error("Erro crítico: Você esqueceu de ativar o 'Login Anônimo' no Firebase Authentication!");
+        } else {
+          toast.error("Erro de conexão de segurança. Tente recarregar a página.");
+        }
+        return;
+      }
+    }
+    
+    // Safety check just in case
+    if (!auth.currentUser) return;
+
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
     const tag = `${name} #${code}`;
     try {
       // Plano B: Tenta dar update primeiro para não sobrepor roles de Admins que estão testando.
-      // E também para não engatilhar bloqueios de re-escrita de 'role' no Firestore Rules.
-      try {
-        await updateDoc(doc(db, "users", auth.currentUser.uid), {
-          table_id: tableId || null,
-          customer_name: name,
-          customer_tag: tag,
-          updated_at: serverTimestamp(),
-        });
-      } catch (updateError: any) {
-        // Se o documento não existe ainda (novo usuário anônimo), faz a criação completa.
-        await setDoc(doc(db, "users", auth.currentUser.uid), {
-          restaurant_id: restaurant.id,
-          role: "customer",
-          table_id: tableId || null,
-          customer_name: name,
-          customer_tag: tag,
-          created_at: serverTimestamp(),
-        });
-      }
+      // Usamos setDoc com merge: true para evitar o erro de "not found" ou "permission denied" 
+      // no console que o updateDoc geraria para usuários anônimos novos.
+      await setDoc(doc(db, "users", auth.currentUser.uid), {
+        restaurant_id: restaurant.id,
+        table_id: tableId || null,
+        customer_name: name,
+        customer_tag: tag,
+        updated_at: serverTimestamp(),
+      }, { merge: true });
 
-      // Persiste localmente para sobreviver a reloads
-      if (tableId) {
-        localStorage.setItem(`customer_tag_${restaurant.id}_${tableId}`, tag);
-        localStorage.setItem(`customer_name_${restaurant.id}_${tableId}`, name);
-      }
+      // Persiste localmente para sobreviver a reloads (independente da mesa)
+      localStorage.setItem(`customer_tag_${restaurant.id}`, tag);
+      localStorage.setItem(`customer_name_${restaurant.id}`, name);
 
       setCustomerTag(tag);
       setCustomerName(name);

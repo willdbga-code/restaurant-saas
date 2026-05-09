@@ -199,9 +199,13 @@ export default function BrandingPage() {
             
             <div className="relative p-8 h-full flex flex-col justify-end text-center space-y-4 pb-12">
               <div className="flex justify-center mb-4">
-                <div className="h-16 w-16 rounded-full bg-zinc-800 border-2 border-white/10 flex items-center justify-center">
-                  <Sparkles className="h-8 w-8 text-white/20" />
-                </div>
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo Preview" className="h-16 w-16 rounded-full object-cover border-2 border-white/10" />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-zinc-800 border-2 border-white/10 flex items-center justify-center">
+                    <Sparkles className="h-8 w-8 text-white/20" />
+                  </div>
+                )}
               </div>
               <h4 className="text-2xl font-black text-white leading-tight">
                 {branding.hero_title || "Seu Título Aqui"}

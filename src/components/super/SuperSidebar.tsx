@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, ShoppingBag, LogOut, ShieldCheck, Globe, Users, Settings, Terminal, History, Headset, Bell } from "lucide-react";
+import { LayoutGrid, ShoppingBag, LogOut, ShieldCheck, Globe, Users, Settings, Terminal, History, Headset, Bell, ChefHat, GlassWater } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
@@ -12,6 +12,9 @@ const nav = [
   { href: "/super/support", label: "Suporte Hub", icon: Headset },
   { href: "/super/terminal", label: "Terminal de Problemas", icon: Terminal },
   { href: "/super/tickets", label: "Histórico de Tickets", icon: History },
+  { href: "/admin", label: "Voltar ao Admin", icon: ShieldCheck },
+  { href: "/admin/kds", label: "KDS Cozinha", icon: ChefHat },
+  { href: "/admin/bar", label: "KDS Bar", icon: GlassWater },
 ];
 
 export function SuperSidebar() {

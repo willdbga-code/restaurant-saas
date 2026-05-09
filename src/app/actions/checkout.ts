@@ -138,3 +138,117 @@ export async function createCustomerCheckoutLink(restaurantId: string, orderId: 
     throw error;
   }
 }
+
+/**
+ * Gera um pagamento PIX real para um pedido do restaurante.
+ * Lê as credenciais do Vault e chama a API do provider configurado.
+ * 
+ * Retorna QR code base64, código copia e cola, e payment_id.
+ * Se o restaurante não tiver gateway configurado, retorna null.
+ */
+export async function createPixPaymentForOrder(
+  restaurantId: string,
+  orderId: string,
+  amountCents: number,
+  customerName?: string,
+): Promise<{
+  provider: string;
+  qr_code_base64: string | null;
+  qr_code_text: string | null;
+  checkout_url?: string;
+  payment_id: string;
+  expires_at: string;
+  amount_brl: number;
+} | null> {
+  try {
+    // 1. Busca config do Vault
+    const config = await getRestaurantPaymentConfig(restaurantId);
+    
+    if (!config || !config.is_active || !config.access_token) {
+      return null; // Sem gateway configurado
+    }
+
+    const provider = config.provider;
+
+    if (provider === "mercadopago") {
+      return await generateMercadoPagoPix(config, orderId, amountCents, customerName);
+    } else if (provider === "infinitepay") {
+      // Para InfinitePay, usa o checkout link existente
+      const result = await createCustomerCheckoutLink(restaurantId, orderId, amountCents, {
+        name: customerName || "Cliente",
+        email: "cliente@restaurantos.com.br",
+        phone_number: "",
+      });
+      return {
+        provider: "infinitepay",
+        qr_code_base64: null,
+        qr_code_text: null,
+        checkout_url: result.url,
+        payment_id: orderId,
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        amount_brl: amountCents / 100,
+      };
+    }
+
+    return null; // Provider não suportado
+  } catch (error: any) {
+    console.error("createPixPaymentForOrder Error:", error);
+    throw new Error(error.message || "Erro ao gerar PIX.");
+  }
+}
+
+/**
+ * Gera PIX via MercadoPago API diretamente (Server Action — roda no servidor Next.js).
+ */
+async function generateMercadoPagoPix(
+  config: { access_token: string; public_key: string },
+  orderId: string,
+  amountCents: number,
+  customerName?: string,
+) {
+  const amountBRL = amountCents / 100;
+  const idempotencyKey = `pix_${orderId}_${Date.now()}`;
+
+  const payload = {
+    transaction_amount: amountBRL,
+    description: `Pedido #${orderId.slice(-6)}`,
+    payment_method_id: "pix",
+    payer: {
+      email: "cliente@restaurantos.com.br",
+      first_name: customerName || "Cliente",
+    },
+    external_reference: orderId,
+  };
+
+  const response = await fetch("https://api.mercadopago.com/v1/payments", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.access_token}`,
+      "X-Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("MercadoPago API Error:", errorText);
+    throw new Error(`MercadoPago (${response.status}): Verifique suas credenciais no Hub de Integrações.`);
+  }
+
+  const mpPayment = await response.json();
+  const txData = mpPayment.point_of_interaction?.transaction_data;
+
+  if (!txData?.qr_code_base64 || !txData?.qr_code) {
+    throw new Error("MercadoPago não retornou QR code. Verifique se PIX está ativo na sua conta.");
+  }
+
+  return {
+    provider: "mercadopago",
+    qr_code_base64: txData.qr_code_base64,
+    qr_code_text: txData.qr_code,
+    payment_id: String(mpPayment.id),
+    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    amount_brl: amountBRL,
+  };
+}

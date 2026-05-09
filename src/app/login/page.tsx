@@ -1,24 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { db } from "@/lib/firebase/config";
-import { ChefHat, Loader2, Sparkles, UserPlus } from "lucide-react";
+import { ChefHat, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { functions } from "@/lib/firebase/config";
 import { httpsCallable } from "firebase/functions";
-import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
 
-
-
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const initialMode = searchParams?.get("register") === "true" ? false : true;
+  const searchParams = useSearchParams();
+  const initialMode = searchParams.get("register") === "true" ? false : true;
 
   const [isLogin, setIsLogin] = useState(initialMode);
   const [loading, setLoading] = useState(false);
@@ -31,17 +27,16 @@ export default function LoginPage() {
   const [slug, setSlug] = useState("");
 
   const [inviteId, setInviteId] = useState<string | null>(null);
-  const [inviteData, setInviteData] = useState<any>(null);
+  const [inviteData, setInviteData] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
-    const invId = searchParams?.get("invite");
+    const invId = searchParams.get("invite");
     if (invId) {
       setInviteId(invId);
-      // Busca info do convite para pre-encher
       getDoc(doc(db, "invitations", invId)).then(snap => {
         if (snap.exists()) {
           const data = snap.data();
-          setInviteData(data);
+          setInviteData(data as Record<string, string>);
           setEmail(data.email || "");
           setName(data.name || "");
         }
@@ -59,14 +54,12 @@ export default function LoginPage() {
         await signInWithEmailAndPassword(auth, email, password);
         
         if (inviteId) {
-          // --- Se o usuário já tem conta e está fazendo login para aceitar um novo convite ---
           const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
           const result: any = await claimFn({
             action: "claim_invitation",
             inviteId: inviteId,
             name: name,
           });
-          // CRITICAL: Força a renovação do token JWT para que o novo role seja enxergado imediatamente
           await auth.currentUser?.getIdToken(true);
           toast.success("Convite aceito! Seu perfil foi atualizado.");
           const role = result?.data?.role;
@@ -78,21 +71,17 @@ export default function LoginPage() {
           router.push("/admin");
         }
       } else {
-
-        // Fluxo de Cadastro
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(userCred.user, { displayName: name });
         const userId = userCred.user.uid;
 
         if (inviteId) {
-          // --- Fluxo de Membro Convidado ---
           const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
           const result: any = await claimFn({
             action: "claim_invitation",
             inviteId: inviteId,
             name: name,
           });
-          // CRITICAL: Força a renovação do token JWT para que o novo role seja enxergado imediatamente
           await auth.currentUser?.getIdToken(true);
           toast.success("Convite aceito! Bem-vindo à equipe.");
           const role = result?.data?.role;
@@ -100,9 +89,8 @@ export default function LoginPage() {
           else if (role === "kitchen") router.push("/admin/kds");
           else if (role === "waiter") router.push("/admin/pdv");
           else router.push("/admin");
-          return; // Evitar o router.push abaixo
+          return;
         } else {
-          // --- Fluxo de Onboarding de Novo Dono ---
           const restaurantId = "rest_" + Date.now().toString(36);
           const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, "");
 
@@ -142,7 +130,6 @@ export default function LoginPage() {
           toast.error("E-mail já cadastrado. Tente fazer login.");
         }
       } else {
-        // Mostra a mensagem real do Firebase/Cloud Function
         const msg = err?.message || "Erro inesperado ao autenticar.";
         toast.error(msg);
       }
@@ -197,7 +184,6 @@ export default function LoginPage() {
                     </>
                   )}
                 </>
-
               )}
               
               <div>
@@ -232,5 +218,17 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-zinc-950/80 mix-blend-multiply" />
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

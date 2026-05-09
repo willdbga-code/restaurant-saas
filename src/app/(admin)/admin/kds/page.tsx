@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useKDSItems } from "@/hooks/useKDSItems";
 import { useRestaurant } from "@/hooks/useRestaurant";
 import { playNotificationSound } from "@/lib/utils/sound";
 import { updateOrderItemStatus, approveItemCancellation, rejectItemCancellation, forceCancelItem } from "@/lib/firebase/orders";
 import type { OrderItem, OrderItemStatus } from "@/lib/firebase/orders";
-import { Loader2, ChefHat, Clock, Bell, CheckCheck, Utensils, Wifi, Printer, MapPin, XCircle, CheckCircle2, AlertCircle, Trash2, Download } from "lucide-react";
+import { Loader2, ChefHat, Clock, Bell, CheckCheck, Utensils, Wifi, Printer, MapPin, XCircle, CheckCircle2, AlertCircle, Trash2, Download, Columns3, LayoutList } from "lucide-react";
 import { ThermalReceipt } from "@/components/admin/kds/ThermalReceipt";
 import { OrderComandaModal } from "@/components/admin/kds/OrderComandaModal";
 import { cn } from "@/lib/utils";
@@ -329,6 +329,20 @@ function KDSColumn({
   );
 }
 
+// ─── Clock (isolated to prevent full-page re-renders every second) ────────────
+const KDSClock = memo(function KDSClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  return (
+    <div className="rounded-lg bg-zinc-900 px-3 py-1.5 font-mono text-sm text-zinc-300">
+      {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+    </div>
+  );
+});
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function KDSPage() {
   const { user } = useAuth();
@@ -371,16 +385,10 @@ export default function KDSPage() {
     return () => window.removeEventListener("print-kds-item", handler);
   }, []);
 
-  // Tick a vleach minute to refresh elapsed times without re-subscribing Firestore
+  // Tick each 30s to refresh elapsed times without re-subscribing Firestore
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -537,6 +545,8 @@ export default function KDSPage() {
   }
 
   const totalActive = pending.length + preparing.length + ready.length;
+  const [viewMode, setViewMode] = useState<"columns" | "tabs">("columns");
+  const [activeTab, setActiveTab] = useState<"pending" | "preparing" | "ready">("pending");
 
   return (
     <div className="flex h-screen flex-col bg-zinc-950">
@@ -568,10 +578,18 @@ export default function KDSPage() {
             <span>Sincronismo Ativo</span>
           </div>
 
-          {/* Clock */}
-          <div className="rounded-lg bg-zinc-900 px-3 py-1.5 font-mono text-sm text-zinc-300">
-            {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-          </div>
+          {/* Clock (isolated to avoid full-page re-renders) */}
+          <KDSClock />
+
+          {/* View mode toggle */}
+          <button
+            onClick={() => setViewMode(v => v === "columns" ? "tabs" : "columns")}
+            className="hidden lg:flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
+            title={viewMode === "columns" ? "Modo Tabs" : "Modo Colunas"}
+          >
+            {viewMode === "columns" ? <LayoutList className="h-3.5 w-3.5" /> : <Columns3 className="h-3.5 w-3.5" />}
+            {viewMode === "columns" ? "Tabs" : "Colunas"}
+          </button>
 
           <div className="h-6 w-px bg-zinc-800 mx-1" />
 
@@ -582,7 +600,7 @@ export default function KDSPage() {
             className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
           >
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            Baixar Relatório (CSV)
+            <span className="hidden sm:inline">Baixar Relatório (CSV)</span>
           </button>
         </div>
       </header>
@@ -598,21 +616,87 @@ export default function KDSPage() {
           <p className="mt-2 text-xs text-zinc-500">Verifique as credenciais do Firebase no .env.local</p>
         </div>
       ) : (
-        <div className="flex flex-1 gap-4 overflow-hidden p-4">
-          {COLUMNS.map((col) => (
-            <KDSColumn
-              key={col.status}
-              col={col}
-              items={
-                col.status === "pending"   ? pending   :
-                col.status === "preparing" ? preparing :
-                ready
-              }
-              tick={tick}
-              restaurantName={restaurant?.name || null}
-            />
-          ))}
-        </div>
+        <>
+          {/* Desktop: side-by-side columns */}
+          <div className={cn("flex-1 gap-4 overflow-hidden p-4", viewMode === "columns" ? "hidden lg:flex" : "hidden")}>
+            {COLUMNS.map((col) => (
+              <KDSColumn
+                key={col.status}
+                col={col}
+                items={
+                  col.status === "pending"   ? pending   :
+                  col.status === "preparing" ? preparing :
+                  ready
+                }
+                tick={tick}
+                restaurantName={restaurant?.name || null}
+              />
+            ))}
+          </div>
+
+          {/* Tablet/Mobile: tab-based view */}
+          <div className={cn("flex-1 flex flex-col overflow-hidden", viewMode === "tabs" ? "flex" : "flex lg:hidden")}>
+            {/* Tab bar */}
+            <div className="flex border-b border-zinc-800 px-4 pt-2">
+              {COLUMNS.map((col) => {
+                const count = col.status === "pending" ? pending.length : col.status === "preparing" ? preparing.length : ready.length;
+                const Icon = col.icon;
+                return (
+                  <button
+                    key={col.status}
+                    onClick={() => setActiveTab(col.status as typeof activeTab)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all border-b-2",
+                      activeTab === col.status
+                        ? "border-orange-500 text-white"
+                        : "border-transparent text-zinc-500 hover:text-zinc-300"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{col.label}</span>
+                    {count > 0 && (
+                      <span className={cn(
+                        "ml-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
+                        activeTab === col.status ? "bg-orange-500 text-white" : "bg-zinc-800 text-zinc-400"
+                      )}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(activeTab === "pending" ? pending : activeTab === "preparing" ? preparing : ready).map((item) => {
+                  const col = COLUMNS.find(c => c.status === activeTab)!;
+                  return (
+                    <KDSCard
+                      key={item.id}
+                      item={item}
+                      nextStatus={col.nextStatus}
+                      nextLabel={col.nextLabel}
+                      nextBtnCls={col.nextBtnCls}
+                      tick={tick}
+                      restaurantName={restaurant?.name || null}
+                    />
+                  );
+                })}
+                {(activeTab === "pending" ? pending : activeTab === "preparing" ? preparing : ready).length === 0 && (
+                  <div className="col-span-full flex items-center justify-center py-20">
+                    <p className="text-sm text-zinc-600">
+                      {activeTab === "pending" ? "Nenhum pedido novo" :
+                       activeTab === "preparing" ? "Nada sendo preparado" :
+                       "Nenhum item pronto"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── Footer — Composite Index Reminder ── */}

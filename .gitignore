@@ -42,3 +42,16 @@ next-env.d.ts
 
 # firebase functions build
 functions/lib/
+
+# debug/temp scripts
+check-count.js
+get_slug.js
+inspect-restaurants.js
+sync-master-stats.js
+lint_output.txt
+current_indexes.json
+current_indexes_v2.json
+firestore.rules.emergency
+mempalace.yaml
+sync_memory.ps1
+export_knowledge.py

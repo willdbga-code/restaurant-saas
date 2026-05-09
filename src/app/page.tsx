@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChefHat, ArrowRight, Smartphone, LayoutDashboard, Utensils, Zap, Users, TrendingUp, CheckCircle2 } from "lucide-react";
+import { ChefHat, ArrowRight, Smartphone, LayoutDashboard, Utensils, Zap, Users, TrendingUp, CheckCircle2, QrCode, GlassWater, Palette, Printer, TableProperties, Shield } from "lucide-react";
 import { useState } from "react";
 import { CheckoutModal } from "@/components/checkout/CheckoutModal";
 import { cn } from "@/lib/utils";
@@ -124,6 +124,55 @@ export default function LandingPage() {
               </p>
             </div>
 
+            {/* Feature 4 — QR Code Mesas */}
+            <div className="group rounded-3xl border border-white/5 bg-zinc-900/50 p-8 hover:border-violet-500/30 transition-all">
+              <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-400 group-hover:scale-110 transition-transform">
+                <QrCode className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">QR Code por Mesa</h3>
+              <p className="text-zinc-500 leading-relaxed text-sm">
+                Cada mesa tem seu QR Code exclusivo. O cliente escaneia e já começa a pedir — sem esperar garçom, sem atrito.
+              </p>
+            </div>
+
+            {/* Feature 5 — Bar Station */}
+            <div className="group rounded-3xl border border-white/5 bg-zinc-900/50 p-8 hover:border-amber-500/30 transition-all">
+              <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
+                <GlassWater className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Estação do Bar</h3>
+              <p className="text-zinc-500 leading-relaxed text-sm">
+                Roteamento inteligente: bebidas vão direto para o bar, pratos para a cozinha. Cada estação vê apenas o que precisa preparar.
+              </p>
+            </div>
+
+            {/* Feature 6 — Gestão de Equipe */}
+            <div className="group rounded-3xl border border-white/5 bg-zinc-900/50 p-8 hover:border-pink-500/30 transition-all">
+              <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-500/10 text-pink-400 group-hover:scale-110 transition-transform">
+                <Users className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Gestão de Equipe</h3>
+              <p className="text-zinc-500 leading-relaxed text-sm">
+                Convide garçons, cozinheiros e bartenders com permissões específicas. Cada membro vê apenas o que precisa — sem confusão.
+              </p>
+            </div>
+
+          </div>
+
+          {/* Second row — smaller feature pills */}
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-4">
+            {[
+              { icon: Printer, label: "Impressão Térmica" },
+              { icon: TableProperties, label: "Gestão de Mesas" },
+              { icon: Palette, label: "Identidade Visual" },
+              { icon: Shield, label: "Multi-Tenant Seguro" },
+              { icon: Smartphone, label: "PWA Mobile" },
+            ].map((f) => (
+              <div key={f.label} className="flex items-center gap-2 rounded-full bg-white/5 border border-white/5 px-5 py-2.5">
+                <f.icon className="h-4 w-4 text-zinc-400" />
+                <span className="text-xs font-bold text-zinc-300">{f.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -174,7 +223,7 @@ export default function LandingPage() {
               <ul className="space-y-4 mb-10 flex-1">
                 {[
                   "Até 500 pedidos/mês",
-                  "Categorias & Produtos iliditados",
+                  "Categorias & Produtos Ilimitados",
                   "Cardápio Digital PWA",
                   "Gestão Financeira básica",
                   "Suporte por Email"
@@ -245,9 +294,9 @@ export default function LandingPage() {
           </div>
           
           <div className="flex items-center gap-12 text-sm font-medium text-zinc-400">
-             <a href="#" className="hover:text-white transition-colors">Termos</a>
-             <a href="#" className="hover:text-white transition-colors">Privacidade</a>
-             <a href="#" className="hover:text-white transition-colors text-zinc-500">© 2026 Studio SaaS.</a>
+             <Link href="/termos" className="hover:text-white transition-colors">Termos de Uso</Link>
+             <Link href="/privacidade" className="hover:text-white transition-colors">Privacidade</Link>
+             <span className="text-zinc-500">© 2026 RestaurantOS.</span>
           </div>
         </div>
       </footer>

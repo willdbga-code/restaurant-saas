@@ -141,7 +141,9 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
     if (!order || !user) return;
     const product = products.find((p) => p.id === productId);
     if (!product) return;
-    const catName = getCatName(product.category_id ?? "");
+    const catData = categories.find((c) => c.category_id === product.category_id || c.id === product.category_id);
+    const catName = catData?.name ?? "—";
+    const station: "kitchen" | "bar" = catData?.is_bar ? "bar" : "kitchen";
     try {
       await addOrderItem({
         restaurantId: user.restaurant_id,
@@ -152,6 +154,7 @@ export default function PDVTablePage({ params }: { params: Promise<{ tableId: st
         categoryName: catName,
         quantity: 1,
         notes: null,
+        station: station, // ROTEAMENTO INTELIGENTE
       });
     } catch { toast.error("Erro ao adicionar item."); }
   }
