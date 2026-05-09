@@ -245,6 +245,97 @@ function BarCard({
   );
 }
 
+// ─── Table Color Hash (Bar theme) ─────────────────────────────────────────────
+const BAR_TABLE_COLORS = [
+  { bg: "bg-indigo-500/15", border: "border-indigo-500/30", text: "text-indigo-400", dot: "bg-indigo-400" },
+  { bg: "bg-violet-500/15", border: "border-violet-500/30", text: "text-violet-400", dot: "bg-violet-400" },
+  { bg: "bg-cyan-500/15", border: "border-cyan-500/30", text: "text-cyan-400", dot: "bg-cyan-400" },
+  { bg: "bg-fuchsia-500/15", border: "border-fuchsia-500/30", text: "text-fuchsia-400", dot: "bg-fuchsia-400" },
+  { bg: "bg-teal-500/15", border: "border-teal-500/30", text: "text-teal-400", dot: "bg-teal-400" },
+  { bg: "bg-sky-500/15", border: "border-sky-500/30", text: "text-sky-400", dot: "bg-sky-400" },
+];
+
+function getBarTableColor(label: string) {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = label.charCodeAt(i) + ((hash << 5) - hash);
+  return BAR_TABLE_COLORS[Math.abs(hash) % BAR_TABLE_COLORS.length];
+}
+
+type BarTableGroupType = { table: string; orderNumber: number; customer: string | null; items: OrderItem[]; oldest: number };
+
+function groupBarByTable(items: OrderItem[]): BarTableGroupType[] {
+  const map = new Map<string, BarTableGroupType>();
+  items.forEach(item => {
+    const key = item.table_label || "Balcão";
+    if (!map.has(key)) map.set(key, { table: key, orderNumber: item.order_number ?? 0, customer: item.customer_name || null, items: [], oldest: item.created_at?.toMillis() ?? Date.now() });
+    const g = map.get(key)!;
+    g.items.push(item);
+    const ts = item.created_at?.toMillis() ?? Date.now();
+    if (ts < g.oldest) { g.oldest = ts; g.orderNumber = item.order_number ?? g.orderNumber; }
+    if (!g.customer && item.customer_name) g.customer = item.customer_name;
+  });
+  return Array.from(map.values()).sort((a, b) => a.oldest - b.oldest);
+}
+
+// ─── Bar Table Group Card ─────────────────────────────────────────────────────
+function BarTableGroup({ group, nextStatus, nextLabel, nextBtnCls, tick }: {
+  group: BarTableGroupType; nextStatus: OrderItemStatus; nextLabel: string; nextBtnCls: string; tick: number;
+}) {
+  const [batchLoading, setBatchLoading] = useState(false);
+  const color = getBarTableColor(group.table);
+  const oldestMin = Math.floor((Date.now() - group.oldest) / 60000);
+  void tick;
+
+  async function advanceAll() {
+    setBatchLoading(true);
+    try {
+      await Promise.all(group.items.map(item => {
+        if (!item.restaurant_id) return Promise.resolve();
+        return updateOrderItemStatus(item.restaurant_id, item.id, nextStatus, item.order_id);
+      }));
+      if (nextStatus === "ready") toast.success(`${group.table}: drinks prontos! 🍸`);
+    } catch { toast.error("Erro ao avançar itens."); }
+    finally { setBatchLoading(false); }
+  }
+
+  return (
+    <div className={cn(
+      "rounded-2xl border overflow-hidden transition-all duration-500 animate-in fade-in slide-in-from-left-3",
+      color.border,
+      oldestMin >= 10 && "shadow-[0_0_25px_rgba(239,68,68,0.25)]"
+    )}>
+      <div className={cn("flex items-center justify-between px-4 py-3 backdrop-blur-sm", color.bg)}>
+        <div className="flex items-center gap-3">
+          <div className={cn("h-3 w-3 rounded-full animate-pulse", color.dot)} />
+          <span className={cn("font-black text-sm uppercase tracking-wide", color.text)}>🍸 {group.table}</span>
+          <span className="text-zinc-500 text-xs font-mono">#{String(group.orderNumber).padStart(3,"0")}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {group.customer && <span className="text-xs font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">👤 {group.customer.split(" ")[0]}</span>}
+          <span className={cn("text-xs font-bold flex items-center gap-1", oldestMin >= 10 ? "text-red-400" : oldestMin >= 5 ? "text-yellow-400" : "text-zinc-400")}>
+            <Clock className="h-3 w-3" />{oldestMin < 1 ? "agora" : `${oldestMin}m`}
+          </span>
+          <span className={cn("flex h-6 min-w-6 px-1 items-center justify-center rounded-full text-[10px] font-black", color.bg, color.text)}>{group.items.length}</span>
+        </div>
+      </div>
+      <div className="divide-y divide-zinc-800/50">
+        {group.items.map(item => (
+          <BarCard key={item.id} item={item} nextStatus={nextStatus} nextLabel={nextLabel} nextBtnCls={nextBtnCls} tick={tick} />
+        ))}
+      </div>
+      {group.items.length > 1 && (
+        <div className="px-3 py-2 bg-zinc-900/50 border-t border-zinc-800/50">
+          <button onClick={advanceAll} disabled={batchLoading}
+            className={cn("w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-black uppercase tracking-wider transition-all active:scale-95", nextBtnCls, batchLoading && "opacity-60")}>
+            {batchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {nextLabel} — Todos ({group.items.length})
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Column ───────────────────────────────────────────────────────────────────
 function BarColumn({
   col,
@@ -256,6 +347,8 @@ function BarColumn({
   tick: number;
 }) {
   const Icon = col.icon;
+  const groups = groupBarByTable(items);
+
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
       <div className={cn("flex items-center justify-between border-b px-4 py-3", col.headerBg)}>
@@ -263,12 +356,17 @@ function BarColumn({
           <Icon className="h-4 w-4 text-white" />
           <span className="font-semibold text-white">{col.label}</span>
         </div>
-        <span className={cn(
-          "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-          items.length > 0 ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-500"
-        )}>
-          {items.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {groups.length > 0 && groups.length !== items.length && (
+            <span className="text-[10px] text-zinc-500 font-bold">{groups.length} mesa(s)</span>
+          )}
+          <span className={cn(
+            "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+            items.length > 0 ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-500"
+          )}>
+            {items.length}
+          </span>
+        </div>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
@@ -281,15 +379,12 @@ function BarColumn({
             </p>
           </div>
         ) : (
-          items.map((item) => (
-            <BarCard
-              key={item.id}
-              item={item}
-              nextStatus={col.nextStatus}
-              nextLabel={col.nextLabel}
-              nextBtnCls={col.nextBtnCls}
-              tick={tick}
-            />
+          groups.map(group => (
+            group.items.length === 1 ? (
+              <BarCard key={group.items[0].id} item={group.items[0]} nextStatus={col.nextStatus} nextLabel={col.nextLabel} nextBtnCls={col.nextBtnCls} tick={tick} />
+            ) : (
+              <BarTableGroup key={group.table} group={group} nextStatus={col.nextStatus} nextLabel={col.nextLabel} nextBtnCls={col.nextBtnCls} tick={tick} />
+            )
           ))
         )}
       </div>

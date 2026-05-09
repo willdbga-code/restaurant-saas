@@ -272,6 +272,122 @@ function KDSCard({
   );
 }
 
+// ─── Table Color Hash ─────────────────────────────────────────────────────────
+const TABLE_COLORS = [
+  { bg: "bg-orange-500/15", border: "border-orange-500/30", text: "text-orange-400", dot: "bg-orange-400" },
+  { bg: "bg-blue-500/15", border: "border-blue-500/30", text: "text-blue-400", dot: "bg-blue-400" },
+  { bg: "bg-emerald-500/15", border: "border-emerald-500/30", text: "text-emerald-400", dot: "bg-emerald-400" },
+  { bg: "bg-purple-500/15", border: "border-purple-500/30", text: "text-purple-400", dot: "bg-purple-400" },
+  { bg: "bg-pink-500/15", border: "border-pink-500/30", text: "text-pink-400", dot: "bg-pink-400" },
+  { bg: "bg-amber-500/15", border: "border-amber-500/30", text: "text-amber-400", dot: "bg-amber-400" },
+  { bg: "bg-cyan-500/15", border: "border-cyan-500/30", text: "text-cyan-400", dot: "bg-cyan-400" },
+  { bg: "bg-rose-500/15", border: "border-rose-500/30", text: "text-rose-400", dot: "bg-rose-400" },
+];
+
+function getTableColor(label: string) {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = label.charCodeAt(i) + ((hash << 5) - hash);
+  return TABLE_COLORS[Math.abs(hash) % TABLE_COLORS.length];
+}
+
+type TableGroup = { table: string; orderNumber: number; customer: string | null; items: OrderItem[]; oldest: number };
+
+function groupByTable(items: OrderItem[]): TableGroup[] {
+  const map = new Map<string, TableGroup>();
+  items.forEach((item) => {
+    const key = item.table_label || "Balcão";
+    if (!map.has(key)) {
+      map.set(key, { table: key, orderNumber: item.order_number ?? 0, customer: item.customer_name || null, items: [], oldest: item.created_at?.toMillis() ?? Date.now() });
+    }
+    const g = map.get(key)!;
+    g.items.push(item);
+    const ts = item.created_at?.toMillis() ?? Date.now();
+    if (ts < g.oldest) { g.oldest = ts; g.orderNumber = item.order_number ?? g.orderNumber; }
+    if (!g.customer && item.customer_name) g.customer = item.customer_name;
+  });
+  return Array.from(map.values()).sort((a, b) => a.oldest - b.oldest);
+}
+
+// ─── Table Group Card ─────────────────────────────────────────────────────────
+function KDSTableGroup({
+  group, nextStatus, nextLabel, nextBtnCls, tick, restaurantName,
+}: {
+  group: TableGroup; nextStatus: OrderItemStatus; nextLabel: string; nextBtnCls: string; tick: number; restaurantName: string | null;
+}) {
+  const [batchLoading, setBatchLoading] = useState(false);
+  const color = getTableColor(group.table);
+  const oldestMin = Math.floor((Date.now() - group.oldest) / 60000);
+  void tick;
+
+  async function advanceAll() {
+    setBatchLoading(true);
+    try {
+      await Promise.all(group.items.map(item => {
+        if (!item.restaurant_id) return Promise.resolve();
+        return updateOrderItemStatus(item.restaurant_id, item.id, nextStatus, item.order_id);
+      }));
+      if (nextStatus === "ready") toast.success(`${group.table}: todos prontos! ✅`);
+    } catch { toast.error("Erro ao avançar itens."); }
+    finally { setBatchLoading(false); }
+  }
+
+  return (
+    <div className={cn(
+      "rounded-2xl border overflow-hidden transition-all duration-500 animate-in fade-in slide-in-from-left-3",
+      color.border,
+      oldestMin >= 10 && "shadow-[0_0_25px_rgba(239,68,68,0.25)]"
+    )}>
+      {/* Group Header */}
+      <div className={cn("flex items-center justify-between px-4 py-3 backdrop-blur-sm", color.bg)}>
+        <div className="flex items-center gap-3">
+          <div className={cn("h-3 w-3 rounded-full animate-pulse", color.dot)} />
+          <div>
+            <span className={cn("font-black text-sm uppercase tracking-wide", color.text)}>🪑 {group.table}</span>
+            <span className="ml-2 text-zinc-500 text-xs font-mono">#{String(group.orderNumber).padStart(3,"0")}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {group.customer && (
+            <span className="text-xs font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+              👤 {group.customer.split(" ")[0]}
+            </span>
+          )}
+          <span className={cn("text-xs font-bold flex items-center gap-1",
+            oldestMin >= 10 ? "text-red-400" : oldestMin >= 5 ? "text-yellow-400" : "text-zinc-400"
+          )}>
+            <Clock className="h-3 w-3" />
+            {oldestMin < 1 ? "agora" : `${oldestMin}m`}
+          </span>
+          <span className={cn("flex h-6 min-w-6 px-1 items-center justify-center rounded-full text-[10px] font-black", color.bg, color.text)}>
+            {group.items.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Items */}
+      <div className="divide-y divide-zinc-800/50">
+        {group.items.map(item => (
+          <KDSCard key={item.id} item={item} nextStatus={nextStatus} nextLabel={nextLabel} nextBtnCls={nextBtnCls} tick={tick} restaurantName={restaurantName} />
+        ))}
+      </div>
+
+      {/* Batch Action */}
+      {group.items.length > 1 && (
+        <div className="px-3 py-2 bg-zinc-900/50 border-t border-zinc-800/50">
+          <button
+            onClick={advanceAll}
+            disabled={batchLoading}
+            className={cn("w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-black uppercase tracking-wider transition-all active:scale-95", nextBtnCls, batchLoading && "opacity-60")}
+          >
+            {batchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {nextLabel} — Todos ({group.items.length})
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Column ───────────────────────────────────────────────────────────────────
 function KDSColumn({
   col,
@@ -285,6 +401,8 @@ function KDSColumn({
   restaurantName: string | null;
 }) {
   const Icon = col.icon;
+  const groups = groupByTable(items);
+
   return (
     <div className="flex min-w-0 flex-1 flex-col rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
       {/* Column header */}
@@ -293,15 +411,20 @@ function KDSColumn({
           <Icon className="h-4 w-4 text-white" />
           <span className="font-semibold text-white">{col.label}</span>
         </div>
-        <span className={cn(
-          "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-          items.length > 0 ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-500"
-        )}>
-          {items.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {groups.length > 0 && groups.length !== items.length && (
+            <span className="text-[10px] text-zinc-500 font-bold">{groups.length} mesa(s)</span>
+          )}
+          <span className={cn(
+            "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+            items.length > 0 ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-500"
+          )}>
+            {items.length}
+          </span>
+        </div>
       </div>
 
-      {/* Items list */}
+      {/* Items list — grouped by table */}
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {items.length === 0 ? (
           <div className="flex h-full items-center justify-center py-12">
@@ -312,16 +435,28 @@ function KDSColumn({
             </p>
           </div>
         ) : (
-          items.map((item) => (
-            <KDSCard
-              key={item.id}
-              item={item}
-              nextStatus={col.nextStatus}
-              nextLabel={col.nextLabel}
-              nextBtnCls={col.nextBtnCls}
-              tick={tick}
-              restaurantName={restaurantName}
-            />
+          groups.map((group) => (
+            group.items.length === 1 ? (
+              <KDSCard
+                key={group.items[0].id}
+                item={group.items[0]}
+                nextStatus={col.nextStatus}
+                nextLabel={col.nextLabel}
+                nextBtnCls={col.nextBtnCls}
+                tick={tick}
+                restaurantName={restaurantName}
+              />
+            ) : (
+              <KDSTableGroup
+                key={group.table}
+                group={group}
+                nextStatus={col.nextStatus}
+                nextLabel={col.nextLabel}
+                nextBtnCls={col.nextBtnCls}
+                tick={tick}
+                restaurantName={restaurantName}
+              />
+            )
           ))
         )}
       </div>
@@ -670,29 +805,29 @@ export default function KDSPage() {
             {/* Tab content */}
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(activeTab === "pending" ? pending : activeTab === "preparing" ? preparing : ready).map((item) => {
+                {(() => {
+                  const tabItems = activeTab === "pending" ? pending : activeTab === "preparing" ? preparing : ready;
                   const col = COLUMNS.find(c => c.status === activeTab)!;
-                  return (
-                    <KDSCard
-                      key={item.id}
-                      item={item}
-                      nextStatus={col.nextStatus}
-                      nextLabel={col.nextLabel}
-                      nextBtnCls={col.nextBtnCls}
-                      tick={tick}
-                      restaurantName={restaurant?.name || null}
-                    />
+                  const groups = groupByTable(tabItems);
+                  
+                  if (tabItems.length === 0) return (
+                    <div className="col-span-full flex items-center justify-center py-20">
+                      <p className="text-sm text-zinc-600">
+                        {activeTab === "pending" ? "Nenhum pedido novo" :
+                         activeTab === "preparing" ? "Nada sendo preparado" :
+                         "Nenhum item pronto"}
+                      </p>
+                    </div>
                   );
-                })}
-                {(activeTab === "pending" ? pending : activeTab === "preparing" ? preparing : ready).length === 0 && (
-                  <div className="col-span-full flex items-center justify-center py-20">
-                    <p className="text-sm text-zinc-600">
-                      {activeTab === "pending" ? "Nenhum pedido novo" :
-                       activeTab === "preparing" ? "Nada sendo preparado" :
-                       "Nenhum item pronto"}
-                    </p>
-                  </div>
-                )}
+
+                  return groups.map(group => (
+                    group.items.length === 1 ? (
+                      <KDSCard key={group.items[0].id} item={group.items[0]} nextStatus={col.nextStatus} nextLabel={col.nextLabel} nextBtnCls={col.nextBtnCls} tick={tick} restaurantName={restaurant?.name || null} />
+                    ) : (
+                      <KDSTableGroup key={group.table} group={group} nextStatus={col.nextStatus} nextLabel={col.nextLabel} nextBtnCls={col.nextBtnCls} tick={tick} restaurantName={restaurant?.name || null} />
+                    )
+                  ));
+                })()}
               </div>
             </div>
           </div>

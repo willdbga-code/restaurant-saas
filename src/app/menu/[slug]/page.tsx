@@ -139,44 +139,78 @@ function FeedCard({ product, onOpenDrawer }: { product: Product; onOpenDrawer: (
   const hasImage = !!product.image_url;
 
   return (
-    <div className="flex flex-col bg-zinc-900 overflow-hidden w-full rounded-[2.5rem] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] transition-all active:scale-[0.98] hover:border-white/10 group">
+    <div 
+      className="flex flex-col bg-zinc-900 overflow-hidden w-full rounded-[2.5rem] border border-white/[0.06] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6)] transition-all duration-500 active:scale-[0.98] hover:border-white/10 group hover:shadow-[0_35px_70px_-15px_rgba(0,0,0,0.7)]"
+      onClick={() => onOpenDrawer(product)}
+    >
       
-      {/* Image Area (Unobstructed) */}
-      <div 
-        className={cn("relative w-full overflow-hidden", hasImage ? "aspect-[4/5] sm:aspect-[4/3]" : "aspect-[3/2] bg-white/[0.02] flex items-center justify-center")}
-        onClick={() => onOpenDrawer(product)}
-      >
+      {/* Image Area — Cinematic Food Porn */}
+      <div className={cn(
+        "relative w-full overflow-hidden", 
+        hasImage ? "aspect-[4/5] sm:aspect-[4/3]" : "aspect-[3/2] bg-gradient-to-br from-zinc-800/50 to-zinc-900 flex items-center justify-center"
+      )}>
         {hasImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img 
-            src={product.image_url!} 
-            alt={product.name} 
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-          />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src={product.image_url!} 
+              alt={product.name} 
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-[1.08]" 
+            />
+            {/* Vignette overlay — cinematic darkening at edges */}
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.5)_100%)]" />
+            {/* Bottom gradient for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent opacity-70" />
+            
+            {/* Floating price badge */}
+            <div className="absolute top-5 right-5 backdrop-blur-2xl bg-black/40 border border-white/10 px-4 py-2 rounded-2xl shadow-2xl transition-transform duration-500 group-hover:scale-105">
+              <span className="text-white text-lg font-black tracking-tighter drop-shadow-lg">{fmt(product.price)}</span>
+            </div>
+          </>
         ) : (
-          <UtensilsCrossed className="h-16 w-16 text-white/5" />
+          <>
+            <div className="relative z-10 flex flex-col items-center gap-3">
+              <div className="h-20 w-20 rounded-[1.5rem] bg-white/[0.03] flex items-center justify-center border border-white/5">
+                <UtensilsCrossed className="h-10 w-10 text-white/[0.08]" />
+              </div>
+            </div>
+            {/* Subtle animated glow */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.02),transparent_70%)] group-hover:opacity-150 transition-opacity duration-700" />
+          </>
         )}
       </div>
 
-      {/* Content Area (Stacked Below) */}
-      <div className="p-6 sm:p-8 space-y-6 bg-zinc-900">
+      {/* Content Area — Premium Typography */}
+      <div className="p-6 sm:p-8 space-y-5 bg-zinc-900 relative">
+        {/* Subtle top glow line */}
+        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+        
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1 flex-1">
-            <h3 className="text-xl sm:text-2xl font-black text-white leading-tight tracking-tight uppercase">{product.name}</h3>
+          <div className="space-y-2 flex-1">
+            <h3 className="text-xl sm:text-2xl font-black text-white leading-tight tracking-tight uppercase" style={{ textWrap: 'balance' } as React.CSSProperties}>
+              {product.name}
+            </h3>
             {product.description && (
-              <p className="text-xs sm:text-sm text-zinc-500 font-medium leading-relaxed line-clamp-2">{product.description}</p>
+              <p className="text-xs sm:text-sm text-zinc-400 font-medium leading-relaxed line-clamp-2 italic">
+                {product.description}
+              </p>
             )}
           </div>
-          <div className="shrink-0 bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl border border-white/10">
-            <span className="text-white text-lg sm:text-xl font-black tracking-tighter">{fmt(product.price)}</span>
-          </div>
+          {!hasImage && (
+            <div className="shrink-0 bg-white/5 px-4 py-2 rounded-2xl border border-white/10 backdrop-blur-sm">
+              <span className="text-white text-lg sm:text-xl font-black tracking-tighter">{fmt(product.price)}</span>
+            </div>
+          )}
         </div>
 
         <button 
-          onClick={() => onOpenDrawer(product)}
-          className="btn-primary-theme w-full py-4 sm:py-5 rounded-[1.5rem] sm:rounded-[1.8rem] text-xs sm:text-sm font-black uppercase tracking-widest active:scale-95 transition-all bg-primary-theme text-white flex items-center justify-center gap-2 shadow-lg shadow-primary-theme/20"
+          onClick={(e) => { e.stopPropagation(); onOpenDrawer(product); }}
+          className="w-full py-4 sm:py-5 rounded-[1.5rem] sm:rounded-[1.8rem] text-xs sm:text-sm font-black uppercase tracking-widest active:scale-95 transition-all bg-primary-theme text-white flex items-center justify-center gap-2 shadow-lg shadow-primary-theme/20 hover:shadow-xl hover:shadow-primary-theme/30 hover:brightness-110 relative overflow-hidden group/btn"
         >
-          <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> Adicionar
+          {/* Shimmer effect */}
+          <div className="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <Plus className="h-4 w-4 sm:h-5 sm:w-5 relative z-10" /> 
+          <span className="relative z-10">Adicionar</span>
         </button>
       </div>
     </div>
