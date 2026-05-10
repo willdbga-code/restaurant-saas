@@ -54,8 +54,8 @@ function LoginForm() {
         await signInWithEmailAndPassword(auth, email, password);
         
         if (inviteId) {
-          const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
-          const result: any = await claimFn({
+          const claimFn = httpsCallable<{ action: string; inviteId: string; name: string }, { role: string }>(functions, "setCustomClaimsAndProfile");
+          const result = await claimFn({
             action: "claim_invitation",
             inviteId: inviteId,
             name: name,
@@ -76,8 +76,8 @@ function LoginForm() {
         const userId = userCred.user.uid;
 
         if (inviteId) {
-          const claimFn = httpsCallable(functions, "setCustomClaimsAndProfile");
-          const result: any = await claimFn({
+          const claimFn = httpsCallable<{ action: string; inviteId: string; name: string }, { role: string }>(functions, "setCustomClaimsAndProfile");
+          const result = await claimFn({
             action: "claim_invitation",
             inviteId: inviteId,
             name: name,
@@ -117,12 +117,13 @@ function LoginForm() {
         router.push("/admin");
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string; message?: string };
       console.error("Login/Register Erro Detalhado:", err);
       
-      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
+      if (firebaseErr.code === "auth/invalid-credential" || firebaseErr.code === "auth/user-not-found" || firebaseErr.code === "auth/wrong-password") {
         toast.error("Email ou senha incorretos.");
-      } else if (err.code === "auth/email-already-in-use") {
+      } else if (firebaseErr.code === "auth/email-already-in-use") {
         if (inviteId) {
           toast.info("Este e-mail já tem conta! Faça login para aceitar o convite.");
           setIsLogin(true);
@@ -130,7 +131,7 @@ function LoginForm() {
           toast.error("E-mail já cadastrado. Tente fazer login.");
         }
       } else {
-        const msg = err?.message || "Erro inesperado ao autenticar.";
+        const msg = firebaseErr?.message || "Erro inesperado ao autenticar.";
         toast.error(msg);
       }
 

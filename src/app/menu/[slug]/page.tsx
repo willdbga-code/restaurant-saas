@@ -154,7 +154,8 @@ function FeedCard({ product, onOpenDrawer }: { product: Product; onOpenDrawer: (
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={product.image_url!} 
-              alt={product.name} 
+              alt={product.name}
+              loading="lazy" 
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-[1.08]" 
             />
             {/* Vignette overlay — cinematic darkening at edges */}
@@ -273,7 +274,7 @@ function CustomizationDrawer({
             </div>
             {product.image_url && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.image_url} alt="Thumb" className="h-24 w-24 rounded-[2rem] object-cover shadow-2xl border border-white/5" />
+              <img src={product.image_url} alt="Thumb" loading="lazy" className="h-24 w-24 rounded-[2rem] object-cover shadow-2xl border border-white/5" />
             )}
           </div>
 
@@ -572,11 +573,15 @@ function MenuContent({ slug }: { slug: string }) {
     };
   }, [slug, tableId]);
 
+  // Ref to track status without causing re-subscriptions
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
   // Sincronização em tempo real do STATUS da Mesa
   useEffect(() => {
     // Se temos a mesa (pelo init), usamos o ID dela. Se não, usamos o que está na URL
     const finalTableId = table?.id || tableId;
-    if (!finalTableId || status === "error") return;
+    if (!finalTableId || statusRef.current === "error") return;
     
     const unsub = onSnapshot(doc(db, "tables", finalTableId), (snap) => {
       if (snap.exists()) {
@@ -587,7 +592,7 @@ function MenuContent({ slug }: { slug: string }) {
         // Regra de Ouro: Se a mesa for dine-in e estiver "available", bloqueia
         if (t.status === "available") {
           setStatus("locked");
-        } else if (status === "locked") {
+        } else if (statusRef.current === "locked") {
           // Se estava bloqueado e agora mudou (occupied/etc), libera
           setStatus("ready");
         }
@@ -595,7 +600,7 @@ function MenuContent({ slug }: { slug: string }) {
     });
 
     return () => unsub();
-  }, [tableId, status, table?.id]);
+  }, [tableId, table?.id]); // Removed `status` — uses ref instead
 
   // Auto-reset após sucesso
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { db } from "@/lib/firebase/config";
@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [impersonatedId, setImpersonatedId] = useState<string | null>(null);
+  const impersonatedIdRef = useRef<string | null>(null);
 
   // Inicialização: Tenta recuperar o ID recuperado do localStorage (Apenas no Cliente)
   useEffect(() => {
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Persistência: Salva no localStorage quando o ID mudar
   useEffect(() => {
+    impersonatedIdRef.current = impersonatedId;
     if (impersonatedId) {
       localStorage.setItem("saas_impersonated_id", impersonatedId);
     } else {
@@ -77,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             uid: firebaseUser.uid,
             name: firebaseUser.displayName || "Super Admin",
             email: firebaseUser.email,
-            restaurant_id: impersonatedId || "master",
+            restaurant_id: impersonatedIdRef.current || "master",
             role: "superadmin",
           });
           setLoading(false);

@@ -13,13 +13,19 @@ export function useKDSItems(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Refs to hold latest callback references (avoids stale closures)
+  const onNewOrderRef = useRef(onNewOrder);
+  const onNewItemsRef = useRef(onNewItems);
+  onNewOrderRef.current = onNewOrder;
+  onNewItemsRef.current = onNewItems;
+
   // Debounce buffer: collect new items arriving within the same snapshot batch
   const bufferRef = useRef<OrderItem[]>([]);
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushBuffer = () => {
     if (bufferRef.current.length === 0) return;
-    onNewItems?.(bufferRef.current);
+    onNewItemsRef.current?.(bufferRef.current);
     bufferRef.current = [];
   };
 
@@ -50,7 +56,7 @@ export function useKDSItems(
             snap.docChanges().forEach((change) => {
               if (change.type === "added") {
                 const newItem = { id: change.doc.id, ...change.doc.data() } as OrderItem;
-                onNewOrder?.();
+                onNewOrderRef.current?.();
 
                 // Buffer and debounce so items from the same order batch together
                 bufferRef.current.push(newItem);

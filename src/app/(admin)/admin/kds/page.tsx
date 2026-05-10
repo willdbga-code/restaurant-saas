@@ -513,8 +513,8 @@ export default function KDSPage() {
 
   // Listen for local print events
   useEffect(() => {
-    const handler = (e: any) => {
-      setPrintItem(e.detail);
+    const handler = (e: Event) => {
+      setPrintItem((e as CustomEvent<OrderItem>).detail);
     };
     window.addEventListener("print-kds-item", handler);
     return () => window.removeEventListener("print-kds-item", handler);

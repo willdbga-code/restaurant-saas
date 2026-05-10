@@ -55,3 +55,4 @@ firestore.rules.emergency
 mempalace.yaml
 sync_memory.ps1
 export_knowledge.py
+scripts/
