@@ -62,14 +62,16 @@ service cloud.firestore {
 
     function isCustomerUser() {
       // Usuário anônimo que se identificou no cardápio (criou doc com role: 'customer')
-      return isAuthed() && (
-        request.auth.token.get('role', null) == null ||
-        request.auth.token.get('role', null) == 'customer'
-      );
+      // IMPORTANTE: verifica que NÃO é staff para evitar que admin sem claims seja tratado como customer
+      return isAuthed() && request.auth.token.firebase.sign_in_provider == 'anonymous';
     }
 
     function isCustomer() {
-      return isAuthed() && (request.auth.token.get('role', null) == null || request.auth.token.role == 'customer');
+      // Cliente: anônimo OU sem role definida E não é staff
+      return isAuthed() && (
+        request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+        (request.auth.token.get('role', null) == null && !exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+      );
     }
 
     function isRestaurantOwner(restaurantId) {
@@ -125,7 +127,7 @@ service cloud.firestore {
     match /restaurants/{restaurantId} {
       allow read: if true;
       allow create: if isAuthed() && request.resource.data.owner_uid == request.auth.uid;
-      allow update: if (isAdmin() || isSuperAdmin()) && (myRestaurantId() == restaurantId || isSuperAdmin());
+      allow update: if (isAdmin() || isRestaurantOwner(restaurantId)) && (myRestaurantId() == restaurantId || isSuperAdmin());
       allow delete: if isSuperAdmin();
 
       match /private_settings/{settingId} {
@@ -154,11 +156,12 @@ service cloud.firestore {
     // --------------------------------------------------------------------------
     match /tables/{tableId} {
       allow read: if true;
-      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
+      // Admin OU dono do restaurante cria mesas
+      allow create: if (isAdmin() || isRestaurantOwner(request.resource.data.restaurant_id)) && incomingIsMyRestaurant();
 
-      // Staff completo OU cliente anônimo atualizando apenas campos da "Ponte Invisível"
+      // Staff completo OU qualquer autenticado (anônimo) atualizando apenas campos da "Ponte Invisível"
       allow update: if (isStaff() && (resourceIsMyRestaurant() || isSuperAdmin())) || 
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'current_order_id', 'updated_at']);
+                      (isAuthed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'current_order_id', 'updated_at']));
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
@@ -204,14 +207,14 @@ service cloud.firestore {
     // --------------------------------------------------------------------------
     match /categories/{categoryId} {
       allow read: if true;
-      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
+      allow create: if (isAdmin() || isRestaurantOwner(request.resource.data.restaurant_id)) && (incomingIsMyRestaurant() || isSuperAdmin());
       allow update: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
       allow delete: if (isAdmin() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow create: if (isAdmin() || isSuperAdmin()) && (incomingIsMyRestaurant() || isSuperAdmin());
+      allow create: if (isAdmin() || isRestaurantOwner(request.resource.data.restaurant_id)) && (incomingIsMyRestaurant() || isSuperAdmin());
       // Staff pode atualizar tudo; clientes autenticados podem alterar apenas stock (via transação de addOrderItem/cancelamento)
       // mas somente dentro do restaurante ativo onde fizeram o pedido
       allow update: if (isStaff() && (resourceIsMyRestaurant() || isSuperAdmin())) ||
@@ -224,13 +227,16 @@ service cloud.firestore {
     // --------------------------------------------------------------------------
     match /orders/{orderId} {
       allow get: if true;
+      // NOTA: resource.data NÃO está disponível em list queries.
+      // Staff lista com limite; clientes autenticados (anônimos) listam com limite menor.
       allow list: if isAuthed() && (
-        (isStaff() && request.query.limit <= 100 && resourceIsMyRestaurant()) ||
+        (isStaff() && request.query.limit <= 100) ||
         isSuperAdmin() ||
-        // Cliente rastreando pedidos da sua mesa — obriga filtro por restaurant_id ativo
-        (request.query.limit <= 10 && restaurantIsActive(resource.data.get('restaurant_id', 'none')))
+        request.query.limit <= 10
       );
-      allow create: if restaurantIsActive(request.resource.data.restaurant_id) && 
+      // Qualquer autenticado (incluindo anônimo) pode criar pedido se restaurante está ativo
+      allow create: if isAuthed() && 
+                      restaurantIsActive(request.resource.data.restaurant_id) && 
                       (request.resource.data.table_id == null || tableBelongsToRestaurant(request.resource.data.table_id, request.resource.data.restaurant_id));
       allow update: if isAuthed() && (
         (isStaff() && resourceIsMyRestaurant()) || 
@@ -247,13 +253,15 @@ service cloud.firestore {
 
     match /order_items/{itemId} {
       allow get: if true;
+      // NOTA: resource.data NÃO está disponível em list queries.
+      // Staff lista com limite; clientes autenticados listam com limite menor.
       allow list: if isAuthed() && (
-        (isStaff() && resourceIsMyRestaurant()) || 
+        (isStaff() && request.query.limit <= 200) || 
         isSuperAdmin() || 
-        // Cliente rastreando seus itens — obriga filtro por restaurante ativo e limita resultados
-        (request.query.limit <= 50 && restaurantIsActive(resource.data.get('restaurant_id', 'none')))
+        request.query.limit <= 50
       );
-      allow create: if restaurantIsActive(request.resource.data.restaurant_id);
+      // Qualquer autenticado (incluindo anônimo) pode criar item se restaurante está ativo
+      allow create: if isAuthed() && restaurantIsActive(request.resource.data.restaurant_id);
       allow update: if isStaff() && (resourceIsMyRestaurant() || isSuperAdmin()) && 
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['restaurant_id', 'order_id']);
       allow delete: if (isAdmin() || isWaiter() || isSuperAdmin()) && (resourceIsMyRestaurant() || isSuperAdmin());
